@@ -7,3 +7,44 @@ libraries as necessaries.
 
 This contribution repository is both the proving ground for new functionality, and the archive for functionality that (while useful) may not fit well into the Videoflow paradigm.
 
+## Installation
+### Install videoflow_contrib from videoflow/videoflow-contrib
+
+```
+git clone https://github.com/videoflow/videoflow-contrib.git
+cd videoflow-contrib
+python3 setup.py install
+```
+
+Alternatively, using pip:
+
+```
+sudo pip3 install git+https://github.com/videoflow/videoflow-contrib.git
+```
+
+To uninstall:
+
+```
+pip3 uninstall videoflow_contrib
+```
+
+## Example Usage
+Consumers, producers and processors from the Videoflow-contrib library are used
+in the same way as the components within Videoflow itself.
+
+```
+from videoflow.core import Flow
+from videoflow.producers import IntProducer
+from videoflow_contrib.processors.identity import IdentityProcessor
+from videoflow.consumers import CommandlineConsumer
+
+producer = IntProducer(0, 40, 0.1)
+identity = IdentityProcessor()(producer)
+printer = CommandlineConsumer()(identity)
+flow = Flow([producer], [printer])
+flow.run()
+flow.join()
+
+```
+
+
