@@ -28,6 +28,10 @@ To uninstall:
 pip3 uninstall videoflow_contrib
 ```
 
+## Contributing
+For contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md). 
+Also, whenever you add a new contribution, be sure to also update the [CODEOWNERS](CODEOWNERS) file.  Doing so will, in the future, tag you whenever an issue or a pull request about your feature is opened.
+
 ## Example Usage
 Consumers, producers and processors from the Videoflow-contrib library are used
 in the same way as the components within Videoflow itself.
