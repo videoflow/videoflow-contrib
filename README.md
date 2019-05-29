@@ -1,4 +1,8 @@
 # videoflow-contrib: Videoflow community contributions
+
+[![Build Status](https://travis-ci.org/videoflow/videoflow-contrib.svg?branch=master)](https://travis-ci.org/videoflow/videoflow-contrib)
+[![license](https://img.shields.io/github/license/mashape/apistatus.svg?maxAge=2592000)](https://github.com/videoflow/videoflow-contrib/blob/master/LICENSE)
+
 This library is the official extension repository for the Videoflow library. 
 It contains additional consumers, producers, processors, subflows, etc. which are not yet available within Videoflow itself. 
 All of these additional modules can be used in conjunction with core Videoflow flows.
