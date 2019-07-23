@@ -39,7 +39,10 @@ class DeepSort(OneTaskProcessorNode):
         - Arguments:
             - bboxes (np.array) (nb_boxes, 133). \
                 The 133 is splitted as follows: [top, left, width, height, confidence, features...]
-
+        
+        - Returns:
+            - tracks: (np.array) (nb_tracks, 5) \
+                Specifically (nb_boxes, [top, left, width, height, track_id])
         '''
         detection_list = []
         for bbox_data in bboxes:
@@ -55,8 +58,8 @@ class DeepSort(OneTaskProcessorNode):
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
             bbox = track.to_tlwh()
-            results.append([
-                track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]
-            ])
-        return results
+            results.append(
+                np.array([bbox[0], bbox[1], bbox[2], bbox[3], track.track_id], np.int32)
+            )
         
+        return np.array(results, np.int32)
