@@ -10,6 +10,7 @@ import random
 from timeit import time
 from timeit import default_timer as timer  ### to calculate FPS
 
+from PIL import Image
 import numpy as np
 from keras import backend as K
 from keras.models import load_model
@@ -18,29 +19,29 @@ from PIL import Image, ImageFont, ImageDraw
 from videoflow.utils.downloader import get_file
 from videoflow.core.node import ProcessorNode
 
-from yolo3.model import yolo_eval
-from yolo3.utils import letterbox_image
+from .yolo3.model import yolo_eval
+from .yolo3.utils import letterbox_image
+from .yolo3 import preprocessing
 
 class YOLO(ProcessorNode):
     def __init__(self, model_path = None):
         self.model_path = model_path
-        self.anchors_path = 'model_data/yolo_anchors.txt'
-        self.classes_path = 'model_data/coco_classes.txt'
+        self.anchors_path = None
+        self.classes_path = None
         self.score = 0.5
         self.iou = 0.5
-        self.class_names = self._get_class()
-        self.anchors = self._get_anchors()
-        self.sess = K.get_session()
-        self.model_image_size = (416, 416) # fixed size or (None, None)
-        self.is_fixed_size = self.model_image_size != (None, None)
-        self.boxes, self.scores, self.classes = self.generate()
+        super(YOLO, self).__init__()
 
     def open(self):
         # TODO: Figure out device_id later.
         if self.model_path is None:
             remote_url = 'https://github.com/videoflow/videoflow-contrib/releases/download/models/yolo.h5'
             self.model_path = get_file('yolo.h5', remote_url)
-
+        if self.anchors_path is None:
+            self.anchors_path = get_file('yolo_anchors.txt', 'https://github.com/videoflow/videoflow-contrib/releases/download/models/yolo_anchors.txt')
+        if self.classes_path is None:
+            self.classes_path = get_file('coco_classes.txt', 'https://github.com/videoflow/videoflow-contrib/releases/download/models/yolo_anchors.txt')
+    
         self.class_names = self._get_class()
         self.anchors = self._get_anchors()
         self.sess = K.get_session()
@@ -92,7 +93,11 @@ class YOLO(ProcessorNode):
         '''
         - Arguments:
             - image: np.array (h, w, 3) in rgb format.
+        
+        - Returns:
+            - return_boxs: an array of arrays [[x, y, w, h]]
         '''
+        image = Image.fromarray(image)
         if self.is_fixed_size:
             assert self.model_image_size[0]%32 == 0, 'Multiples of 32 required'
             assert self.model_image_size[1]%32 == 0, 'Multiples of 32 required'
@@ -132,7 +137,10 @@ class YOLO(ProcessorNode):
                 h = h + y
                 y = 0 
             return_boxs.append([x,y,w,h])
-
+        
+        nms_max_overlap = 1.0
+        indices = preprocessing.non_max_suppression(return_boxs, nms_overlap)
+        return_boxs = [return_boxs[i] for i in indices]
         return return_boxs
     
     def process(self, image):
