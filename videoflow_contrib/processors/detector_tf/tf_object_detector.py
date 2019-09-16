@@ -14,6 +14,57 @@ import tensorflow as tf
 
 BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 
+def reframe_box_masks_to_image_masks(box_masks, boxes, h, w):
+    '''
+    Transforms the box masks back to full image masks
+
+    - Arguments:
+        - box_masks: tf.float32 tensor of size [nb_masks, height, width],
+        - boxes: tf.float32 tensor of size [nb_masks, 4] containing box \
+            coordinates [ymin, xmin, ymax, xmax].  Note that the coordinates \
+            are normalized
+        - h: Image height. The output masks will have height h.
+        - w: Image width. The output masks will have widht w.
+    
+    - Returns:
+        - image_masks: tf.float32 tnesor of size [nb_masks, h, w]
+    '''
+    def reframe_box_masks_to_image_masks_default():
+        '''
+        The default function when there are more than 0 box masks
+        '''
+        def transform_boxes_relative_to_boxes(boxes, reference_boxes):
+            boxes = tf.reshape(boxes, [-1, 2, 2])
+            min_corner = tf.expand_dims(reference_boxes[:, 0:2], 1)
+            max_corner = tf.expand_dims(reference_boxes[:, 2:4], 1)
+            transformed_boxes = (boxes - min_corner) / (max_corner - min_corner)
+            return tf.reshape(transformed_boxes, [-1, 4])
+        
+        box_masks_expanded = tf.expand_dims(box_masks, axis = 3)
+        num_boxes = tf.shape(box_masks_expanded)[0]
+        unit_boxes = tf.concat(
+            [
+                tf.zeros([num_boxes, 2]),
+                tf.ones([num_boxes, 2])
+            ],
+            axis = 1
+        )
+        reverse_boxes = transform_boxes_relative_to_boxes(unit_boxes, boxes)
+        return tf.image.crop_and_resize(
+            image = box_masks_expanded,
+            boxes = reverse_boxes,
+            box_ind = tf.range(num_boxes),
+            crop_size = [h, w],
+            extrapolation_value = 0.0
+        )
+    
+    image_masks = tf.cond(
+        tf.shape(box_masks)[0] > 0,
+        reframe_box_masks_to_image_masks_default,
+        lambda: tf.zeros([0, h, w, 1], dtype = tf.float32)
+    )
+    return tf.squeeze(image_masks, axis = 3)
+
 class TensorflowObjectDetector(ObjectDetector):
     '''
     Finds object detections by running a Tensorflow model on an image.
