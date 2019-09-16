@@ -6,7 +6,6 @@ can be downloaded
 import pytest
 
 from videoflow.utils.downloader import get_file
-#from videoflow_contrib.processors.detector_tf.tf_object_detector import TensorflowObjectDetector, BASE_URL_DETECTION
 from videoflow_contrib.processors.detector_tf import TensorflowObjectDetector, BASE_URL_DETECTION
 
 def test_detector_resources():

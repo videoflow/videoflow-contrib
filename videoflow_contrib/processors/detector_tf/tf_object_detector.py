@@ -57,7 +57,7 @@ class TensorflowObjectDetector(ObjectDetector):
         "ssd-resnet50-fpn_coco",
         "fasterrcnn-resnet101_coco",
         "fasterrcnn-resnet101_kitti",
-        "fasterrcnn-inception-resnetv2-atrous_oidv4",
+        "fasterrcnn-inception-resnetv2-atrous_oidv4.1",
         "ssd-mobilenetv2_oidv4"
     ]
 
