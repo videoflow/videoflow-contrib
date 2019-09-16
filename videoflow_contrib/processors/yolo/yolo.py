@@ -97,6 +97,7 @@ class YOLO(ProcessorNode):
         - Returns:
             - return_boxs: an array of arrays [[x, y, w, h]]
         '''
+        print(image.shape)
         image = Image.fromarray(image)
         if self.is_fixed_size:
             assert self.model_image_size[0]%32 == 0, 'Multiples of 32 required'
