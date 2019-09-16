@@ -36,8 +36,6 @@ install:
 
   - pip install -e .[tests] --progress-bar off
 
-  - pip install -e .
-
   # install TensorFlow (CPU version).
   - pip install tensorflow==1.13.1 --progress-bar off
 
