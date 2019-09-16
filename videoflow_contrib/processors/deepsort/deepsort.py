@@ -47,7 +47,7 @@ class DeepSort(OneTaskProcessorNode):
         detection_list = []
         for bbox_data in bboxes:
             bbox, confidence, feature = bbox_data[0:4], bbox_data[4], bbox_data[5:]
-            if bbox[3] < min_height:
+            if bbox[3] < self._min_height:
                 continue
             detection_list.append(Detection(bbox, confidence, feature))
         

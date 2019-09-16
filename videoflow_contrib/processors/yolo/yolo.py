@@ -140,7 +140,7 @@ class YOLO(ProcessorNode):
             return_boxs.append([x,y,w,h])
         
         nms_max_overlap = 1.0
-        indices = preprocessing.non_max_suppression(return_boxs, nms_overlap)
+        indices = preprocessing.non_max_suppression(return_boxs, nms_max_overlap)
         return_boxs = [return_boxs[i] for i in indices]
         return return_boxs
     
