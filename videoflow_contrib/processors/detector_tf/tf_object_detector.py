@@ -8,7 +8,7 @@ from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.processors.vision.detectors import ObjectDetector
 from ...utils.tensorflow import TensorflowModel
-from utils.downloader import get_file
+from videoflow.utils.downloader import get_file
 
 import tensorflow as tf
 
@@ -135,4 +135,3 @@ class TensorflowObjectDetector(ObjectDetector):
         boxes, scores, classes = boxes[indexes], scores[indexes], classes[indexes]
         scores, classes = np.expand_dims(scores, axis = 1), np.expand_dims(classes, axis = 1)
         return np.concatenate((boxes, classes, scores), axis = 1)
-        
