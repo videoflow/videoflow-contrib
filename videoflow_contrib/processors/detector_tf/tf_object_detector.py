@@ -14,6 +14,7 @@ import tensorflow as tf
 
 BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 
+
 class TensorflowObjectDetector(ObjectDetector):
     '''
     Finds object detections by running a Tensorflow model on an image.
@@ -37,7 +38,7 @@ class TensorflowObjectDetector(ObjectDetector):
     .. csv-table:: Models supported Open Images V4 Dataset
         
         "Model","Speed (ms)", "Open Images V4 mAP@0.5"
-        "fasterrcnn-inception-resnetv2-atrous_oidv4","425","54"
+        "fasterrcnn-inception-resnetv2-atrous_oidv4.1","425","54"
         "ssd-mobilenetv2_oidv4","89","36"
     
     - Arguments:
