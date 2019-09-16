@@ -12,7 +12,7 @@ from videoflow.utils.downloader import get_file
 
 import tensorflow as tf
 
-BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow_contrib/releases/download/detector_tf/'
+BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 
 class TensorflowObjectDetector(ObjectDetector):
     '''
