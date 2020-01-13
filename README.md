@@ -20,7 +20,7 @@ See the [Tensorflow Object detection](detector_tf) sub-package for an example of
 Consumers, producers and processors from the Videoflow-contrib library are used
 in the same way as the components within Videoflow itself.
 
-```
+```python
 import videoflow
 import videoflow.core.flow as flow
 from videoflow.core.constants import BATCH
