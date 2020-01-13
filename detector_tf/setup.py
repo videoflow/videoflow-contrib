@@ -2,16 +2,18 @@ from setuptools import setup
 from setuptools import find_packages
 import os.path
 
-name = 'videoflow_contrib'
+name = 'videoflow_contrib_detector_tf'
 install_requires = ['videoflow']
 
 setup(name=name,
       version='0.1',
-      description='Videoflow Library for Python, Community Contributions',
+      description='Tensorflow Detection Component for Videoflow Library',
       author='Jadiel de Armas',
       author_email='jadielam@gmail.com',
       url='https://github.com/videoflow/videoflow-contrib',
       license='MIT',
+      packages = ['videoflow_contrib.detector_tf'],
+      zip_safe = False,
       install_requires=install_requires,
       extras_require={
           'visualize': ['pydot>=1.2.0'],
@@ -30,6 +32,5 @@ setup(name=name,
           'Programming Language :: Python :: 3.6',
           'Topic :: Software Development :: Libraries',
           'Topic :: Software Development :: Libraries :: Python Modules'
-      ],
-      packages=find_packages()
+      ]
 )

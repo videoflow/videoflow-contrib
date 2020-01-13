@@ -7,7 +7,7 @@ import numpy as np
 from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.processors.vision.detectors import ObjectDetector
-from ...utils.tensorflow import TensorflowModel
+from .tensorflow_utils import TensorflowModel
 from videoflow.utils.downloader import get_file
 
 import tensorflow as tf
