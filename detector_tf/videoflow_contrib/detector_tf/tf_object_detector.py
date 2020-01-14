@@ -7,13 +7,48 @@ import numpy as np
 from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.processors.vision.detectors import ObjectDetector
-from .tensorflow_utils import TensorflowModel
+from .tensorflow_utils import TensorflowModel, TfliteModel
 from videoflow.utils.downloader import get_file
 
 import tensorflow as tf
 
 BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 
+class TfliteObjectDetector(ObjectDetector):
+    def __init__(self, path_to_pb_file,
+                num_classes = 1):
+        self._num_classes = num_classes
+        self._path_to_pb_file = path_to_pb_file
+        self._tflite_model = None
+        super(TfliteObjectDetector, self).__init__(nb_tasks = 1, device_type = CPU)
+    
+    def open(self):
+        '''
+        Creates session with tensorflow model
+        '''
+        self._tflite_model = TfliteModel(
+            self._path_to_pb_file,
+            ["image_tensor:0"],
+            ["detection_boxes:0", "detection_scores:0", "detection_classes:0", "num_detections:0"]
+        )
+    
+    def close(self):
+        pass
+
+    def _detect(self, im: np.array) -> np.array:
+        h, w, _ = im.shape
+        im_expanded = np.expand_dims(im, axis = 0)
+        boxes, scores, classes, num = self._tflite_model.run_on_input(im_expanded)
+        boxes, scores, classes = np.squeeze(boxes, axis = 0), np.squeeze(scores, axis = 0), np.squeeze(classes, axis = 0)
+
+        # boxes denormalization
+        boxes[:,[0, 2]] = boxes[:,[0, 2]] * h
+        boxes[:,[1, 3]] = boxes[:,[1, 3]] * w
+
+        indexes = np.where(scores > self._min_score_threshold)[0]
+        boxes, scores, classes = boxes[indexes], scores[indexes], classes[indexes]
+        scores, classes = np.expand_dims(scores, axis = 1), np.expand_dims(classes, axis = 1)
+        return np.concatenate((boxes, classes, scores), axis = 1)
 
 class TensorflowObjectDetector(ObjectDetector):
     '''
@@ -41,6 +76,10 @@ class TensorflowObjectDetector(ObjectDetector):
         "fasterrcnn-inception-resnetv2-atrous_oidv4.1","425","54"
         "ssd-mobilenetv2_oidv4","89","36"
     
+    .. csv-table:: Modesl supported Faces dataset
+        "Model","Speed (ms)", "Open Images V4 mAP@0.5"
+        "ssd-mobilenetv2_faces","89","79"
+    
     - Arguments:
         - num_classes (int): number of classes that the detector can recognize.
         - path_to_pb_file (str): Path where model pb file is \
@@ -59,7 +98,8 @@ class TensorflowObjectDetector(ObjectDetector):
         "fasterrcnn-resnet101_coco",
         "fasterrcnn-resnet101_kitti",
         "fasterrcnn-inception-resnetv2-atrous_oidv4.1",
-        "ssd-mobilenetv2_oidv4"
+        "ssd-mobilenetv2_oidv4",
+        "ssd-mobilenetv2_faces"
     ]
 
     def __init__(self, 

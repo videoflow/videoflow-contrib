@@ -1,6 +1,6 @@
 # To build: docker build -t detector_tf -f Dockerfile .
 # To run: docker run -it detector_tf
-FROM tensorflow/tensorflow:1.14.0-py3
+FROM tensorflow/tensorflow:1.14.0-gpu-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN echo "deb http://old-releases.ubuntu.com/ubuntu/ yakkety universe" | tee -a /etc/apt/sources.list
