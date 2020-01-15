@@ -31,9 +31,10 @@ def obfuscate_faces(video_filepath):
     reader = VideofileReader(video_filepath)
     frame = FrameIndexSplitter()(reader)
     faces = TensorflowObjectDetector(num_classes = 1, 
-        path_to_pb_file = '/Users/dearj019/Documents/workspace/videoflow-contrib/releases/detector_tf/face.pb',
+        architecture = 'ssd-mobilenetv2',
+        dataset = 'faces',
         min_score_threshold = 0.2)(frame)
-    annotations = BoundingBoxAnnotator(class_labels_path = '/Users/dearj019/Documents/workspace/videoflow-contrib/releases/detector_tf/face_label_map.pbtxt')(frame, faces)
+    annotations = BoundingBoxAnnotator(class_labels_dataset = 'faces')(frame, faces)
     writer = VideofileWriter('blurred_video.mp4', codec = 'avc1')(annotations)
     fl = flow.Flow([reader], [writer], flow_type = BATCH)
     fl.run()
