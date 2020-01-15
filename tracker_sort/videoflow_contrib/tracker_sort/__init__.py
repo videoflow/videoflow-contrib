@@ -1,4 +1,3 @@
 from contextlib import suppress
 
-with suppress(ImportError):
-    from .sort import KalmanFilterBoundingBoxTracker
+from .sort import KalmanFilterBoundingBoxTracker

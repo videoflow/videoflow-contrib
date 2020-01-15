@@ -226,12 +226,15 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
 
         #create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i,:]) 
+            trk = KalmanBoxTracker(dets[i,:])
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
             d = trk.get_state()[0]
-            if((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
+            # The line below differs from the one below it in that the threshold for time_since_update in order to include
+            # track in results
+            #if((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
+            if((trk.time_since_update < self.max_age) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
                 ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
             i -= 1
         
