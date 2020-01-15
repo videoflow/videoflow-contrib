@@ -8,7 +8,8 @@ from videoflow.core import ProcessorNode
 
 class ObjectAnnotator(ProcessorNode):
     """
-    Draws bounding boxes around objects on images.
+    Draws bounding boxes around objects on images. It is a more complete annotator
+    that includes labels, track ids into the annotation.
 
     - Arguments:
         - class_labels: mapping from int id to str label of class
