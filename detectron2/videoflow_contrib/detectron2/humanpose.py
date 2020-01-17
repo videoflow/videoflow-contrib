@@ -1,3 +1,5 @@
+import os.path
+
 import numpy as np
 import cv2
 from detectron2.modeling import build_model
@@ -56,10 +58,10 @@ class HumanPoseAnnotator(ProcessorNode):
         ("right_knee", "right_ankle", (255, 195, 77))
     ]
 
-    def __init__():
+    def __init__(self):
         super(HumanPoseAnnotator, self).__init__()
 
-    def process(self, im: np.array, keypoints: np.array):
+    def process(self, im: np.array, frame_keypoints: np.array):
         '''
         - Arguments: 
             - im: np.array of shape (h, w, 3)
@@ -68,69 +70,66 @@ class HumanPoseAnnotator(ProcessorNode):
         - Returns:
             - im: np.array of shape (h, w, 3) annotated with keypoints on it.
         '''
-        visible = {}
-        for idx, keypoint in enumerate(keypoints):
-            # draw keypoint
-            x, y, prob = keypoint
-            if prob > self._KEYPOINT_THRESHOLD:
-                self.draw_circle((x, y), color=_RED)
-                if keypoint_names:
+        for _, person_keypoints in enumerate(frame_keypoints):
+            visible = {}
+            for idx, keypoint in enumerate(person_keypoints):
+                # draw keypoint
+                x, y, prob = keypoint
+                x, y = int(x), int(y)
+                if prob > self._KEYPOINT_THRESHOLD:
+                    im = cv2.circle(im, (x, y), 10, (0, 0, 255), thickness = -1)
                     keypoint_name = self.COCO_PERSON_KEYPOINT_NAMES[idx]
                     visible[keypoint_name] = (x, y)
+            
+            # Draw normal connected lines
+            for kp0, kp1, color in self.KEYPOINT_CONNECTION_RULES:
+                if kp0 in visible and kp1 in visible:
+                    x0, y0 = visible[kp0]
+                    x1, y1 = visible[kp1]
+                    im = cv2.line(im, (x0, y0), (x1, y1), color, thickness = 5)
         
-        # Draw normal connected lines
-        for kp0, kp1, color in self.KEYPOINT_CONNECTION_RULES:
-            if kp0 in visible and kp1 in visible:
-                x0, y0 = visible[kp0]
-                x1, y1 = visible[kp1]
-                im = cv2.line(im, (x0, y0), (x1, y1), color, thickness = 10)
-        
-        # Draw lines from nose to mid-shoulder and mid-shoulder to mid-hip
-        # Note that this strategy is specific to person keypoints.
-        try:
-            ls_x, ls_y = visible["left_shoulder"]
-            rs_x, rs_y = visible["right_shoulder"]
-            mid_shoulder_x, mid_shoulder_y = (ls_x + rs_x) / 2, (ls_y + rs_y) / 2
-        except KeyError:
-            pass
-        else:
-            nose_x, nose_y = visible.get("nose", (None, None))
-            if nose_x is not None:
-                im = cv2.line(im, (nose_x, nose_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
-           
+            # Draw lines from nose to mid-shoulder and mid-shoulder to mid-hip
+            # Note that this strategy is specific to person keypoints.
             try:
-                # draw line from mid-shoulder to mid-hip
-                lh_x, lh_y = visible["left_hip"]
-                rh_x, rh_y = visible["right_hip"]
+                ls_x, ls_y = visible["left_shoulder"]
+                rs_x, rs_y = visible["right_shoulder"]
+                mid_shoulder_x, mid_shoulder_y = int((ls_x + rs_x) / 2), int((ls_y + rs_y) / 2)
             except KeyError:
                 pass
             else:
-                mid_hip_x, mid_hip_y = (lh_x + rh_x) / 2, (lh_y + rh_y) / 2
-                im = cv2.line(im, (mid_hip_x, mid_hip_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
+                nose_x, nose_y = visible.get("nose", (None, None))
+                if nose_x is not None:
+                    im = cv2.line(im, (nose_x, nose_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
+            
+                try:
+                    # draw line from mid-shoulder to mid-hip
+                    lh_x, lh_y = visible["left_hip"]
+                    rh_x, rh_y = visible["right_hip"]
+                except KeyError:
+                    pass
+                else:
+                    mid_hip_x, mid_hip_y = int((lh_x + rh_x) / 2), int((lh_y + rh_y) / 2)
+                    im = cv2.line(im, (mid_hip_x, mid_hip_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
         
         return im
 
 class Detectron2HumanPose(ProcessorNode):
-    def __init__(self, path_to_model_file = None, path_to_model_config = None, architecture = None,
+    '''
+    Supported architectures:
+
+    - R50_FPN_3x
+    '''
+
+    a_R50_FPN_3x = 'R50_FPN_3x'
+
+    def __init__(self, path_to_model_file, path_to_model_config,
                 nb_tasks = 1, device_type = GPU):
         self._path_to_model_file = path_to_model_file
         self._path_to_model_config = path_to_model_config
         self._predictor = None
-        if self._path_to_model_file is None and architecture is None:
-            raise ValueError('If path_to_model_file is None, then architecture cannot be None')
-        if self._path_to_model_file is not None and path_to_model_config is None:
-            raise ValueError('If path_to_model_file is not None, then path_to_model_config is not None')
-        if self._path_to_model_file is None:
-            self._remote_model_file_name = f'{architecture}.pkl'
-            self._remote_model_config_name = f'{architecture}.yaml'
         super(Detectron2HumanPose, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
 
     def open(self):
-        if self._path_to_model_file is None:
-            remote_model_url = BASE_URL_DETECTRON2 + self._remote_model_file_name
-            remote_config_url = BASE_URL_DETECTRON2 + self._remote_model_config_name
-            self._path_to_model_file = get_file(self._remote_model_file_name, remote_model_url)
-            self._path_to_model_config = get_file(self._remote_model_config_name, remote_config_url)
         cfg = get_cfg()
         cfg.merge_from_file(self._path_to_model_config)
         cfg.MODEL.WEIGHTS = self._path_to_model_file
@@ -149,7 +148,7 @@ class Detectron2HumanPose(ProcessorNode):
             - pred_keypoints: np.array of shape (nb_people, 17, [x, y, prob])
             - pred_boxes: np.array of shape (nb_people, [xmin, ymin, xmax, ymax])
         '''
-        outputs = predictor(im)
+        outputs = self._predictor(im)
         in_cpu = outputs['instances'].to('cpu')
         pred_keypoints = in_cpu.pred_keypoints.numpy()
         pred_boxes = in_cpu.pred_boxes.tensor.numpy()

@@ -1,1 +1,1 @@
-from .humanpose import Detectron2HumanPose
+from .humanpose import Detectron2HumanPose, HumanPoseAnnotator
