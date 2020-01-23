@@ -11,7 +11,7 @@ install_requires = [
 
 setup(name=name,
       version='0.1',
-      description='Tensorflow Detection Component for Videoflow Library',
+      description='Kalman Filter tracker',
       author='Jadiel de Armas',
       author_email='jadielam@gmail.com',
       url='https://github.com/videoflow/videoflow-contrib',
