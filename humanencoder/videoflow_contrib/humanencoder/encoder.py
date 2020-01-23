@@ -7,7 +7,7 @@ import cv2
 import tensorflow as tf
 
 from videoflow.core.node import ProcessorNode
-from videoflow.utils.tensorflow import TensorflowModel
+from .tensorflow_utils import TensorflowModel
 from videoflow.utils.downloader import get_file
 from videoflow.core.constants import CPU, GPU
 
