@@ -56,11 +56,10 @@ RUN pip install --user -e detectron2_repo
 ENV FVCORE_CACHE="/tmp"
 
 # Installing videoflow_contrib packages
-RUN ls
 RUN git clone https://github.com/videoflow/videoflow-contrib.git
 RUN pip3 install --user /home/appuser/videoflow-contrib/detectron2 --find-links /home/appuser/videoflow-contrib/detector_tf
 RUN pip3 install --user /home/appuser/videoflow-contrib/tracker_deepsort --find-links /home/appuser/videoflow-contrib/tracker_sort
 RUN pip3 install --user /home/appuser/videoflow-contrib/humanencoder --find-links /home/appuser/videoflow-contrib/humanencoder
 
 # Command to run example
-CMD ["python3", "/home/appuser/videoflow-contrib/solutions/human_tracking/human_tracking.py"]
+#CMD ["python3", "/home/appuser/videoflow-contrib/solutions/human_tracking/human_tracking.py"]

@@ -1,0 +1,1 @@
+include videoflow_contrib/detectron2/configs/*
