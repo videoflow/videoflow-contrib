@@ -5,7 +5,7 @@ import os.path
 name = 'videoflow_contrib_tracker_deepsort'
 install_requires = [
     'videoflow',
-    'scipy==1.2.3',
+    'scipy==1.3.3',
     'scikit-learn==0.20.0'
 ]
 

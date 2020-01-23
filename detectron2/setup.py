@@ -15,6 +15,7 @@ setup(name=name,
       url='https://github.com/videoflow/videoflow-contrib',
       license='MIT',
       packages = ['videoflow_contrib.detectron2'],
+      package_data = {'videoflow_contrib.detectron2': ['videoflow_contrib/detectron2/configs/*']},
       zip_safe = False,
       install_requires=install_requires,
       extras_require={
