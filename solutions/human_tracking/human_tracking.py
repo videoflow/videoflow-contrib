@@ -14,6 +14,11 @@ from videoflow_contrib.humanencoder import HumanEncoder
 from videoflow.processors.vision.annotators import TrackerAnnotator
 from videoflow.utils.downloader import get_file
 
+
+BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/"
+VIDEO_NAME = "people_walking.mp4"
+URL_VIDEO = BASE_URL_EXAMPLES + VIDEO_NAME
+
 class FrameIndexSplitter(videoflow.core.node.ProcessorNode):
     def __init__(self):
         super(FrameIndexSplitter, self).__init__()
@@ -105,8 +110,10 @@ class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
         ).astype(np.int32)
         return to_return
 
-def track_humans(video_filepath):
-    reader = VideofileReader(video_filepath)
+def track_humans():
+    input_file_path = get_file(VIDEO_NAME, URL_VIDEO)
+    output_file = 'annotated_video.avi'
+    reader = VideofileReader(input_file_path)
     frame = FrameIndexSplitter()(reader)
     results = Detectron2HumanPose(architecture = 'R50_FPN_3x', device_type = 'cpu')(frame)
     keypoints = KeypointsExtractor()(results)
@@ -117,12 +124,11 @@ def track_humans(video_filepath):
     tracker_input = AppendFeaturesToBoundingBoxes()(bounding_boxes, human_features)
     tracks = DeepSort()(tracker_input)
     tracks_anotator_input = ConvertTracksForAnotation()(tracks)
-    anotated_tracks = TrackerAnnotator()(anotated_keypoints, trakcs_anotator_input)
-    writer = VideofileWriter('anotated_video.avi')(anotated_tracks)
+    anotated_tracks = TrackerAnnotator()(anotated_keypoints, tracks_anotator_input)
+    writer = VideofileWriter(output_file)(anotated_tracks)
     fl = flow.Flow([reader], [writer], flow_type = BATCH)
     fl.run()
     fl.join()
 
 if __name__ == '__main__':
-    video_file = sys.argv[1]
-    track_humans(video_file)
+    track_humans()
