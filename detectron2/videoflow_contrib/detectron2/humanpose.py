@@ -151,7 +151,7 @@ class Detectron2HumanPose(ProcessorNode):
             cfg.MODEL.DEVICE = 'gpu'
         if self._path_to_model_file is None:
             remote_url = BASE_URL_DETECTRON2 + self._remote_model_file_name
-            self._path_to_model_file = get_file(self._remote_model_file_name, remote_url)
+            self._path_to_model_file = get_file('detectron2_model.pkl', remote_url)
             current_folder = os.path.abspath(os.path.dirname(__file__))
             self._path_to_model_config = os.path.join(current_folder, 'configs', f'{self._architecture}.yaml')
         cfg.merge_from_file(self._path_to_model_config)
