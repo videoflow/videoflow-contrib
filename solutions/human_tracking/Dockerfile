@@ -56,6 +56,7 @@ RUN pip install --user -e detectron2_repo
 ENV FVCORE_CACHE="/tmp"
 
 # Installing videoflow_contrib packages
+RUN ls -lha
 RUN git clone https://github.com/videoflow/videoflow-contrib.git
 RUN pip3 install --user /home/appuser/videoflow-contrib/detectron2 --find-links /home/appuser/videoflow-contrib/detector_tf
 RUN pip3 install --user /home/appuser/videoflow-contrib/tracker_deepsort --find-links /home/appuser/videoflow-contrib/tracker_sort
