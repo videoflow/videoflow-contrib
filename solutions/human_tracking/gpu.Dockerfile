@@ -44,6 +44,7 @@ RUN pip3 install --user /home/appuser/videoflow --find-links /home/appuser/video
 RUN pip3 install --user torch==1.3 torchvision==0.4 tensorboard==1.14 cython==0.29
 RUN pip3 install --user 'git+https://github.com/cocodataset/cocoapi.git@636becdc73d54283b3aac6d4ec363cffbb6f9b20#subdirectory=PythonAPI'
 RUN pip3 install --user 'git+https://github.com/facebookresearch/fvcore@8694adf300c4e47d575ad1583bfb9d646fe9c12c'
+RUN pip3 install --user -U pillow==6.1
 
 # Install detectron2, pointing it to an specific id, 
 # since repo does not have tag as of December 18, 2019
