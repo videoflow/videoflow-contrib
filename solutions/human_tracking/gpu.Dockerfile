@@ -65,5 +65,7 @@ RUN pip3 install --user /home/appuser/videoflow-contrib/detectron2 --find-links 
 RUN pip3 install --user /home/appuser/videoflow-contrib/tracker_deepsort --find-links /home/appuser/videoflow-contrib/tracker_sort
 RUN pip3 install --user /home/appuser/videoflow-contrib/humanencoder --find-links /home/appuser/videoflow-contrib/humanencoder
 
+COPY --chown=appuser:sudo human_tracking.py /home/appuser/human_tracking.py
+
 # Command to run example
-CMD ["python3", "/home/appuser/videoflow-contrib/solutions/human_tracking/human_tracking.py"]
+CMD ["python3", "/home/appuser/human_tracking.py"]
