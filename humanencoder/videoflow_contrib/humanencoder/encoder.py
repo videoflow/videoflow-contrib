@@ -80,7 +80,7 @@ class HumanEncoder(ProcessorNode):
     def process(self, im_batch):
         '''
         - Arguments:
-            - im (np.array): (batch, h, w, 3)
+            - im_batch: list of np.arrays: (h, w, 3)
         
         - Returns:
             - feature_vector: (batch, f)
