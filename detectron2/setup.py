@@ -16,6 +16,7 @@ setup(name=name,
       license='MIT',
       packages = ['videoflow_contrib.detectron2'],
       package_data = {'videoflow_contrib.detectron2': ['videoflow_contrib/detectron2/configs/*']},
+      include_package_data = True,
       zip_safe = False,
       install_requires=install_requires,
       extras_require={
