@@ -25,10 +25,10 @@ class KeypointsExtractor(videoflow.core.node.ProcessorNode):
         keypoints, bounding_boxes = data
         return keypoints
 
-def annotate_video(video_filepath, model_filepath, config_filepath):
+def annotate_video(video_filepath):
     reader = VideofileReader(video_filepath)
     frame = FrameIndexSplitter()(reader)
-    results = Detectron2HumanPose(model_filepath, config_filepath, device_type = 'cpu')(frame)
+    results = Detectron2HumanPose(architecture = 'R50_FPN_3x', device_type = 'cpu')(frame)
     keypoints = KeypointsExtractor()(results)
     annotated_frame = HumanPoseAnnotator()(frame, keypoints)
     writer = VideofileWriter('pose.avi')(annotated_frame)
@@ -38,6 +38,4 @@ def annotate_video(video_filepath, model_filepath, config_filepath):
 
 if __name__ == '__main__':
     video_filepath = sys.argv[1]
-    model_filepath = sys.argv[2]
-    config_filepath = sys.argv[3]
-    annotate_video(video_filepath, model_filepath, config_filepath)
+    annotate_video(video_filepath)

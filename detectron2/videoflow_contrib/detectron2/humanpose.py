@@ -119,24 +119,44 @@ class Detectron2HumanPose(ProcessorNode):
 
     - R50_FPN_3x
     '''
+    
+    supported_models = [
+        'R50_FPN_3x'
+    ]
 
-    a_R50_FPN_3x = 'R50_FPN_3x'
-
-    def __init__(self, path_to_model_file, path_to_model_config,
+    def __init__(self, path_to_model_file = None, path_to_model_config = None,
+                architecture = 'R50_FPN_3x',
                 nb_tasks = 1, device_type = GPU):
         self._path_to_model_file = path_to_model_file
         self._path_to_model_config = path_to_model_config
+        self._architecture = architecture
         self._predictor = None
+
+        if path_to_model_file is None and architecture is None:
+            raise ValueError('If path_to_model_file is None, then architecture cannot be None')
+        if path_to_model_file is None:
+            remote_model_id = f'{architecture}'
+            if remote_model_id not in self.supported_models:
+                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
+            self._remote_model_file_name = f'{architecture}.pkl'
+        if path_to_model_file is not None and path_to_model_config is None:
+            raise ValueError('path_to_model_config needs to be provided if path_to_model_file is provided')
         super(Detectron2HumanPose, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
 
     def open(self):
         cfg = get_cfg()
-        cfg.merge_from_file(self._path_to_model_config)
-        cfg.MODEL.WEIGHTS = self._path_to_model_file
         if self.device_type == CPU:
             cfg.MODEL.DEVICE = 'cpu'
         elif self.device_type == GPU:
             cfg.MODEL.DEVICE = 'gpu'
+        if self._path_to_model_file is None:
+            remote_url = BASE_URL_DETECTRON2 + self._remote_model_file_name
+            self._path_to_model_file = get_file(self._remote_model_file_name, remote_url)
+            current_folder = os.path.abspath(os.path.dirname(__file__))
+            self._path_to_model_config = os.path.join(current_folder, 'configs', f'{self._architecture}.yaml')
+        cfg.merge_from_file(self._path_to_model_config)
+        cfg.MODEL.WEIGHTS = self._path_to_model_file
+        
         self._predictor = DefaultPredictor(cfg)
     
     def process(self, im: np.array):
