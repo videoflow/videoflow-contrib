@@ -72,6 +72,12 @@ def associate_detections_to_trackers(detections, trackers, metric_function, iou_
     """
       Assigns detections to tracked object (both represented as bounding boxes)
       Returns 3 lists of matches, unmatched_detections and unmatched_trackers
+      - Returns:
+        - matches: np.array of shape ...
+        - unmatched_detections: np.array of shape (nb_of_unmatches, ) that contains the 
+            indices of the detections that were not matched
+        - unmatched_trackers: np.array of shape (nb_of_nonmatched_tracks, ) that contains the
+            indices of the unmatched tracks
     """
     distance_threshold = 500
 
@@ -178,15 +184,23 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         - min_hits: A tracklet is considered a valid track if it has a hit streak larger \
             than or equal to ``min_hits``
         - metric_function_type : str, one of ``iou`` or ``euclidean`` 
+        - show_in_between: If set to True, it will return tracks of bounding boxes even if they were
+            not detected by the detector.  If set to False, it will return only the tracks for the 
+            bounding boxes detected in this frame by the detector. Note that when set to False, it
+            will return the same number of entries and in the same order as they were passed to it.
+        - return_original_dets: Returns the same number of tracks as original dets, with indexes matching
+            If for some reason an original det does not have a corresponding track, the track index is -1
     '''
     
-    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou'):
+    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', show_in_between = True, return_original_dets = False):
         self.max_age = max_age
         self.min_hits = min_hits
         self.trackers = []
         self.frame_count = 0
         self.metric_function_type = metric_function_type
         self.previous_fid = -1
+        self.return_original_dets = return_original_dets
+        self.show_in_betwee = show_in_between
         self.metric_function = metric_factory(metric_function_type)
         super(KalmanFilterBoundingBoxTracker, self).__init__()
 
@@ -207,7 +221,6 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         #get predicted locations from existing trackers.
         trks = np.zeros((len(self.trackers), 5))
         to_del = []
-        ret = []
         for t, trk in enumerate(trks):
             pos = self.trackers[t].predict()[0]
             trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
@@ -219,9 +232,11 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function)
 
         #update matched trackers with assigned detections
+        d_to_t = {}
         for t, trk in enumerate(self.trackers):
             if(t not in unmatched_trks):
-                d = matched[np.where(matched[:,1] == t)[0], 0] 
+                d = matched[np.where(matched[:,1] == t)[0], 0]
+                d_to_t[d] = t
                 trk.update(dets[d,:][0])
 
         #create and initialise new trackers for unmatched detections
@@ -229,18 +244,32 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
             trk = KalmanBoxTracker(dets[i,:])
             self.trackers.append(trk)
         i = len(self.trackers)
-        for trk in reversed(self.trackers):
-            d = trk.get_state()[0]
-            # The line below differs from the one below it in that the threshold for time_since_update in order to include
-            # track in results
-            #if((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
-            if((trk.time_since_update < self.max_age) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
-                ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
-            i -= 1
+
+        ret = []
+        if self.return_original_dets:
+            for idx, det in enumerate(dets):
+                if idx in d_to_t:
+                    trk = self.trackers[d_to_t[idx]]
+                    d = trk.get_state()[0]
+                    ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
+                else:
+                    ret.append(np.concatenate((det[:4], [-1])).reshape(1, -1))
+        else:
+            for trk in self.trackers:
+                d = trk.get_state()[0]
+                if self.show_in_between:
+                    if((trk.time_since_update < self.max_age) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
+                        ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
+                else:
+                    if((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
+                        ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
         
-            #remove dead tracklet
-            if(trk.time_since_update > self.max_age):
+        # Remove dead tracklets
+        for trk in reversed(self.trackers):
+            i -= 1
+            if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
+        
         if(len(ret) > 0):
             return np.concatenate(ret)
         
