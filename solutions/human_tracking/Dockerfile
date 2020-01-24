@@ -41,7 +41,8 @@ RUN pip3 install --user /home/appuser/videoflow --find-links /home/appuser/video
 
 # Install Pytorch
 # See https://pytorch.org/ for other options if you use a different version of CUDA
-RUN pip3 install --user torch==1.3 torchvision==0.4 tensorboard==1.14 cython==0.29
+RUN pip3 install --user torch==1.3.1+cpu torchvision==0.4.2+cpu -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install --user tensorboard==1.14 cython==0.29
 RUN pip3 install --user 'git+https://github.com/cocodataset/cocoapi.git@636becdc73d54283b3aac6d4ec363cffbb6f9b20#subdirectory=PythonAPI'
 RUN pip3 install --user 'git+https://github.com/facebookresearch/fvcore@8694adf300c4e47d575ad1583bfb9d646fe9c12c'
 RUN pip3 install --user -U pillow==6.1
@@ -56,11 +57,12 @@ RUN pip install --user -e detectron2_repo
 ENV FVCORE_CACHE="/tmp"
 
 # Installing videoflow_contrib packages
-RUN ls -lha
 RUN git clone https://github.com/videoflow/videoflow-contrib.git
 RUN pip3 install --user /home/appuser/videoflow-contrib/detectron2 --find-links /home/appuser/videoflow-contrib/detector_tf
 RUN pip3 install --user /home/appuser/videoflow-contrib/tracker_deepsort --find-links /home/appuser/videoflow-contrib/tracker_sort
 RUN pip3 install --user /home/appuser/videoflow-contrib/humanencoder --find-links /home/appuser/videoflow-contrib/humanencoder
 
+COPY --chown=appuser:sudo human_tracking.py /home/appuser/human_tracking.py
+
 # Command to run example
-#CMD ["python3", "/home/appuser/videoflow-contrib/solutions/human_tracking/human_tracking.py"]
+CMD ["python3", "/home/appuser/human_tracking.py"]

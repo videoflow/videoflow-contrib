@@ -45,12 +45,12 @@ class BoundingBoxesExtractor(videoflow.core.node.ProcessorNode):
             - bounding_boxes: (nb_boxes, [ymin, xmin, width, height, klass, score])
         '''
         keypoints, bounding_boxes = data
-        scores = np.ones((keypoints.shape[1], 1))
-        bounding_boxes = np.concat(
+        scores = np.ones((bounding_boxes.shape[0], 1))
+        bounding_boxes = np.concatenate(
             [bounding_boxes[:, [1, 0]], 
-            bounding_boxes[:,2] - bounding_boxes[:,0],
-            bounding_boxes[:,3] - bounding_boxes[:,1]], axis = 1)
-        bounding_boxes = np.concat([bounding_boxes, scores], axis = 1)
+            np.expand_dims(bounding_boxes[:,2] - bounding_boxes[:,0], 1),
+            np.expand_dims(bounding_boxes[:,3] - bounding_boxes[:,1], 1)], axis = 1)
+        bounding_boxes = np.concatenate([bounding_boxes, scores], axis = 1)
         bounding_boxes = bounding_boxes.astype(np.int32)
         return bounding_boxes
 
@@ -84,7 +84,7 @@ class AppendFeaturesToBoundingBoxes(videoflow.core.node.ProcessorNode):
             - bboxes: (batch, [ymin, xmin, width, height, score])
             - features: (batch, nb_features)
         '''
-        to_return = np.concat([bboxes, features], axis = 1)
+        to_return = np.concatenate([bboxes, features], axis = 1)
         return to_return
 
 class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
@@ -99,16 +99,20 @@ class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
         - Returns:
             - tracks: (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
         '''
-        to_return = np.concateante(
-            [
-                tracks[:, [0, 1]],
-                tracks[:, 0] + tracks[:, 3],
-                tracks[:, 1] + tracks[:, 2],
-                tracks[:, 4]
-            ],
-            axis = 1
-        ).astype(np.int32)
-        return to_return
+
+        if len(tracks) > 0:
+            to_return = np.concatenate(
+                [
+                    tracks[:, [0, 1]],
+                    tracks[:, 0] + tracks[:, 3],
+                    tracks[:, 1] + tracks[:, 2],
+                    tracks[:, 4]
+                ],
+                axis = 1
+            ).astype(np.int32)
+            return to_return
+        else:
+            return tracks
 
 def track_humans():
     input_file_path = get_file(VIDEO_NAME, URL_VIDEO)
