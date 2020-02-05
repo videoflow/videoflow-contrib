@@ -73,7 +73,7 @@ def associate_detections_to_trackers(detections, trackers, metric_function, iou_
       Assigns detections to tracked object (both represented as bounding boxes)
       Returns 3 lists of matches, unmatched_detections and unmatched_trackers
       - Returns:
-        - matches: np.array of shape ...
+        - matches: np.array of shape (n, 2)
         - unmatched_detections: np.array of shape (nb_of_unmatches, ) that contains the 
             indices of the detections that were not matched
         - unmatched_trackers: np.array of shape (nb_of_nonmatched_tracks, ) that contains the
@@ -236,6 +236,8 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         for t, trk in enumerate(self.trackers):
             if(t not in unmatched_trks):
                 d = matched[np.where(matched[:,1] == t)[0], 0]
+                print(d)
+                print(type(d))
                 d_to_t[d] = t
                 trk.update(dets[d,:][0])
 
