@@ -148,7 +148,7 @@ class Detectron2HumanPose(ProcessorNode):
         if self.device_type == CPU:
             cfg.MODEL.DEVICE = 'cpu'
         elif self.device_type == GPU:
-            cfg.MODEL.DEVICE = 'gpu'
+            cfg.MODEL.DEVICE = 'cuda'
         if self._path_to_model_file is None:
             remote_url = BASE_URL_DETECTRON2 + self._remote_model_file_name
             self._path_to_model_file = get_file('detectron2_model.pkl', remote_url)
