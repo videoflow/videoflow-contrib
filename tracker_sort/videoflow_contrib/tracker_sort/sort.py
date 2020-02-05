@@ -236,9 +236,7 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         for t, trk in enumerate(self.trackers):
             if(t not in unmatched_trks):
                 d = matched[np.where(matched[:,1] == t)[0], 0]
-                print(d)
-                print(type(d))
-                d_to_t[d] = t
+                d_to_t[d[0]] = t
                 trk.update(dets[d,:][0])
 
         #create and initialise new trackers for unmatched detections
