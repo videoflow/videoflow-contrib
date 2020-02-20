@@ -54,8 +54,14 @@ class Tracker:
         """Perform measurement update and track management.
         Parameters
         ----------
-        detections : List[deep_sort.detection.Detection]
+        - detections : List[deep_sort.detection.Detection]
             A list of detections at the current time step.
+        
+        Returns
+        -------
+        - matches: List[(int, int)] matche from track_id to det_id
+        - unmatched_tracks: List[int]
+        - unmatched_detections: List[int]
         """
         # Run matching cascade.
         matches, unmatched_tracks, unmatched_detections = \
@@ -82,10 +88,16 @@ class Tracker:
             track.features = []
         self.metric.partial_fit(
             np.asarray(features), np.asarray(targets), active_targets)
+        return matches, unmatched_tracks, unmatched_detections
+        
 
     def _match(self, detections):
 
         def gated_metric(tracks, dets, track_indices, detection_indices):
+            '''
+            - Returns:
+                - cost_matrix: np.array of shape (nb_confirmed_tracks, nb_detections)
+            '''
             features = np.array([dets[i].feature for i in detection_indices])
             targets = np.array([tracks[i].track_id for i in track_indices])
             cost_matrix = self.metric.distance(features, targets)
