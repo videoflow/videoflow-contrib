@@ -55,10 +55,10 @@ class DeepSort(OneTaskProcessorNode):
             dets_idx += 1
             dets_to_bboxes_d[dets_idx] = idx
     
-        to_return = np.concatenate([a[:,0:5], np.full((a.shape[0], 1), -1), axis = 1)
+        to_return = np.concatenate([bboxes[:,0:5], np.full((bboxes.shape[0], 1), -1), axis = 1)
         self._tracker.predict()
         matches, _, unmatched_dets = self._tracker.update(detection_list)
-        tracks_to_dets_d = dict(matches) 
+        tracks_to_dets_d = dict(matches)
         
         for idx, track in enumerate(self._tracker.tracks):
             if not track.is_confirmed() or track.time_since_update > 1:
