@@ -1,25 +1,23 @@
 from setuptools import setup
 from setuptools import find_packages
-import os.path
 
-name = 'videoflow_contrib_tracker_deepsort'
+name = 'videoflow_contrib_tracktor'
 
+# It requires Pytorch, but you will need to install it on your own
 install_requires = [
-    'videoflow',
-    'scipy==1.3.3',
-    'scikit-learn==0.20.0'
+    'videoflow'
 ]
 
 setup(name=name,
       version='0.1',
-      description='DeepSORT human tracker.',
+      description='Tracktor MultiTracker',
       author='Jadiel de Armas',
       author_email='jadielam@gmail.com',
       url='https://github.com/videoflow/videoflow-contrib',
       license='GNU General Public License v3.0',
-      packages = ['videoflow_contrib.tracker_deepsort'],
+      packages = ['videoflow_contrib.tracktor'],
       zip_safe = False,
-      install_requires=install_requires,
+      install_requires = install_requires,
       extras_require={
           'visualize': ['pydot>=1.2.0'],
           'tests': ['pytest',
