@@ -33,11 +33,11 @@ class Tracker:
                 max_features_num,
                 reid_sim_threshold,
                 reid_iou_threshold,
-                do_align,
                 motion_model_cfg,
                 warp_mode,
                 number_of_iterations,
-                termination_eps
+                termination_eps,
+                do_align = False
         )
 
         self.obj_detect = obj_detect
@@ -139,14 +139,149 @@ class Tracker:
             features = torch.cat([t.features for t in self.tracks], 0)
         else:
             features = torch.zeros(0).cuda()
-        
         return features
     
     def get_inactive_features(self):
         '''
         Get the features of all inactive tracks
         '''
+        if len(self.inactive_tracks) == 1:
+            features = self.inactive_tracks[0].features
+        elif len(self.inactive_tracks) > 1:
+            features = torch.cat([t.features for t in self.inactive_tracks], 0)
+        else:
+            features = torch.zeros(0).cuda()
+        return features
+    
+    def reid(self, blob, new_det_pos, new_det_scores):
         pass
+    
+    def get_appearances(self, blob):
+        pass
+
+    def add_features(self, new_features):
+        pass
+    
+    def align(self, blob):
+        pass
+
+    def motion_step(self, track):
+        pass
+    
+    def motion(self):
+        pass
+    
+    def step(self, blob):
+        '''
+        This function should be called at every timestep to perform tracking
+        with a blob containing the image information.
+        '''
+        for t in self.tracks:
+            # add current position to last_pos list
+            t.last_pos.append(t.pos.clone())
+        
+        # 1. Look for new detections
+        if self.public_detections:
+            dets = blob['dets'].squeeze(dim = 0)
+            if dets.nelement() > 0:
+                # TODO: I don't understand why the predict_boxes method needs to be 
+                # called here if the boxes are already provided.
+                boxes, scores = self.obj_detect.predict_boxes(blob['img'], dets)
+            else:
+                boxes = scores = torch.zeros(0).cuda()
+        else:
+            boxes, scores = self.obj_detect.detect(blob['img'])
+        
+        if boxes.nelement() > 0:
+            boxes = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
+            inds = torch.gt(scores, self.detection_person_thresh).nonzero().view(-1)
+        else:
+            inds = torch.zeros(0).cuda()
+        
+        if inds.nelement() > 0:
+            det_pos = boxes[inds]
+            det_scores = scores[inds]
+        else:
+            det_pos = torch.zeros(0).cuda()
+            det_scores = torch.zeros(0).cuda()
+        
+        # 2. Predict tracks
+        num_tracks = 0
+        nms_inp_reg = torch.zeros(0).cuda()
+        if len(self.tracks):
+            # 2.1 Align
+            if self.do_align:
+                self.align(blob)
+
+            # 2.2 Apply motion model
+            if self.motion_model_cfg['enabled']:
+                self.motion()
+                self.tracks = [t for t in self.tracks if t.has_positive_area()]
+            
+            # 2.3 Regress
+            person_scores = self.regress_tracks(blob)
+            if len(self.tracks):
+                # nms here if tracks overlap
+                keep = nms(self.get_pos(), person_scores, self.regression_nms_thresh)
+                self.tracks_to_inactive([self.tracks[i] for in in list(range(len(self.tracks))) if i not in keep])
+                if keep.nelement() > 0:
+                    if self.do_reid:
+                        new_features = self.get_appearances(blob)
+                        self.add_features(new_features)
+        
+        # 3. Create new tracks
+        # !!! Here NMS is used to filter out detections that are already covered by tracks. This is
+		# !!! done by iterating through the active tracks one by one, assigning them a bigger score
+		# !!! than 1 (maximum score for detections) and then filtering the detections with NMS.
+		# !!! In the paper this is done by calculating the overlap with existing tracks, but the
+		# !!! result stays the same.
+        if det_pos.nelement() > 0:
+            keep = nms(det_pos, det_scores, self.detection_nms_threshold)
+            det_pos = det_pos[keep]
+            det_scores = det_scores[keep]
+
+            # Check with every track in a single run (problem if tracks delete each other)
+            for t in self.tracks:
+                nms_track_pos = torch.cat([t.pos, det_pos])
+                nms_track_scores = torch.cat(
+                    [torch.tensor([2.0]).to(det_scores.device), det_scores]
+                )
+                keep = nms(nms_track_pos, nms_track_scores, self.detection_nms_thresh)
+                keep = keep[torch.ge(keep, 1)] - 1
+                det_pos = det_pos[keep]
+                det_scores = det_scores[keep]
+                if keep.nelement() == 0:
+                    break
+        
+        if det_pos.nelement() > 0:
+            new_det_pos = det_pos
+            new_det_scores = det_scores
+
+            # Try to reidentify tracks
+            new_det_pos, new_det_scores, new_det_features = self.reid(blob, new_det_pos, new_det_scores)
+
+            if new_det_pos.nelement() > 0:
+                self.add(new_det_pos, new_det_scores, new_det_features)
+            
+        
+        # 4. Generate results
+        for t in self.tracks:
+            if t.id not in self.results.keys():
+                self.results[t.id] = {}
+            self.results[t.id][self.im_index] = np.concatenate([t.pos[0].cpu().numpy(), np.array([t.score])])
+        
+        for t in self.inactive_tracks:
+            t.count_inactive += 1
+        
+        self.inactive_tracks = [
+            t for t in self.inactive_tracks if t.has_positive_area() and t.count_inactive <= self.inactive_patience
+        ]
+
+        self.im_index += 1
+        self.last_image = blob['img'][0]
+    
+    def get_results(self):
+        return self.results
     
 
 class Track(object):
