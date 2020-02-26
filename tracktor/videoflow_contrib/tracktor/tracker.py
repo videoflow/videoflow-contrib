@@ -154,22 +154,119 @@ class Tracker:
         return features
     
     def reid(self, blob, new_det_pos, new_det_scores):
-        pass
+        '''
+        Tries to ReID inactive tracks with provided detections
+        '''
+        new_det_features = [torch.zeros(0).cuda() for _ in range(len(new_det_pos))]
+        if self.do_reid:
+            new_det_features = self.reid_network.test_rois(
+                blob['img'], new_det_pos
+            ).data
+
+            if len(self.inactive_trackers) >= 1:
+                dist_mat, pos = [], []
+                for t in self.inactive_tracks:
+                    dist_mat.append(torch.cat([t.test_features(feat.view(1, -1)) for fet in new_det_features], dim = 1))
+                    pos.append(t_pos)
+                if len(dist_mat) > 1:
+                    dist_mat = torch.cat(dist_mat, 0)
+                    pos = torch.cat(pos, 0)
+                else:
+                    dist_mat = dist_mat[0]
+                    pos = pos[0]
+
+                # Calculate IoU distances
+                iou = bbox_overlaps(pos, new_det_pos)
+                iou_mask = torch.ge(iou, self.reid_iou_threshold)
+                iou_neg_mask = ~iou_mask
+                # Make all impossible assignments to the same add big value
+                # TODO: That 1000 is troublesome there.
+                dist_mat = dist_mat * iou_mask.float() + iou_neg_mask.float() * 1000
+                dist_mat = dist_mat.cpu().numpy()
+
+                row_ind, col_ind = linear_sum_assignment(dist_mat)
+
+                assigned = []
+                remove_inactive = []
+                for r, c in zip(row_ind, col_ind):
+                    if dist_mat[r, c] <= self.reid_sim_threshold:
+                        t = self.inactive_tracks[r]
+                        self.tracks.append(t)
+                        t.count_inactive = 0
+                        t.pos = new_det_pos[c].view(1, -1)
+                        t.reset_last_pos()
+                        t.add_features(new_det_features[c].view(1, -1))
+                        assigned.append(c)
+                        remove_inactive.append(t)
+                
+                for t in remove_inactive:
+                    self.inactive_tracks.remove(t)
+                
+                keep = torch.Tensor([i for in in range(new_det_pos.size(0)) if i not in assigned]).long().cuda()
+                if keep.nelement() > 0:
+                    new_det_pos = new_det_pos[keep]
+                    new_det_scores = new_det_scores[keep]
+                    new_det_features = new_det_features[keep]
+                else:
+                    new_det_pos = torch.zeros(0).cuda()
+                    new_det_scores = torch.zeros(0).cuda()
+                    new_det_features = torch.zeros(0).cuda()
+                
+        return new_det_pos, new_det_scores, new_det_features
+
     
     def get_appearances(self, blob):
-        pass
+        '''
+        Uses the siamese CNN to get features for all active tracks
+        '''
+        new_features = self.reid_network.test_rois(blob['img'], self.get_pos()).data
+        return new_features
 
     def add_features(self, new_features):
-        pass
+        '''
+        Uses the siamese CNN to get the features for all active tracks
+        '''
+        for t, f in zip(self.tracks, new_features):
+            t.add_features(f.view(1, -1))
     
     def align(self, blob):
+        '''
+        Aligns the positions of active and inactive tracks depending on camera motion
+        '''
+        # TODO: To implement later. Not needed right now.
         pass
 
     def motion_step(self, track):
-        pass
+        '''
+        Updates the given track's position by one step based on track.last_v
+        '''
+        if self.motion_model_cfg['center_only']:
+            center_new = get_center(track.pos) + track.last_v
+            track.pos = make_pos(*center_new, get_width(track.pos), get_height(track.pos))
+        else:
+            track.pos = track.pos + track.last_v
     
     def motion(self):
-        pass
+        '''
+        Applies a simple linear motion model that considers the last n_steps steps
+        '''
+        # TODO: Maybe this algorithm can be improved by using Kalman Filter instead of linear motion
+        # here
+        for t in self.tracks:
+            last_pos = list(t.last_pos)
+
+            # average velocity between each pair of consecutive positions in t.last_pos
+            if self.motion_model_cfg['center_only']:
+                vs = [get_center(p2) - get_center(p1) for p1, p2 in zip(last_pos, last_pos[1:])]
+            else:
+                vs = [p2 - p1 for p1, p2 in zip(last_pos, last_pos[1:])]
+            t.last_v = torch.stack(vs).mean(dim = 0)
+            self.motion_step(t)
+        
+        if self.do_reid:
+            for t in self.inactive_tracks:
+                if t.tas_v.nelement() > 0:
+                    self.motion_step(t)
     
     def step(self, blob):
         '''
