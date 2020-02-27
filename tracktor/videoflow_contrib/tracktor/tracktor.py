@@ -77,7 +77,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
             - tracks: (np.array) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
-        self._tracker.step(frame)
+        self._tracker.step({'img': frame})
         results = self._tracker.get_current_tracks()
         return results
     
