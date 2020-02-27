@@ -71,7 +71,7 @@ def main():
             transformed_tracks = tracks_to_annotator.process(tracks)
         except Exception as e:
             print(tracks.shape)
-            raise e
+            continue
         annotated_frame = annotator.process(next_frame, tracks)
         writer.consume(annotated_frame)
 
