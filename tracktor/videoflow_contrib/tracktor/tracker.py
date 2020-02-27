@@ -386,7 +386,6 @@ class Tracker:
             if frame_id in im_indexes:
                 bbox_and_score = im_indexes[frame_id]
                 to_return.append(np.concatenate([bbox_and_score, np.array([track_id])]))
-        print(type(results))
         return np.array(to_return)
 
     def get_results(self):
