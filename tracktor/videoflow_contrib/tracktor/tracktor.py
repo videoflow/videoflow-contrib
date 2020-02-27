@@ -21,7 +21,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
 
     def __init__(self, interpolate):
         self._tracker = None
-        super(Tracktor, self).__init__()
+        super(TracktorFromFrames, self).__init__()
     
     def open(self):
         #1. Load detection model
@@ -35,7 +35,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
 
         #2. Load re-identification model
         reid_model_path = get_file('reid.pkl', URL_REID_MODEL)
-        reid_network = resnet(pretrained = False, {'output_dim': 128})
+        reid_network = resnet50(pretrained = False, **{'output_dim': 128})
         reid_network.load_state_dict(
             torch.load(reid_model_path, map_location = lambda storage, loc: storage)
         )
@@ -56,8 +56,8 @@ class TracktorFromFrames(OneTaskProcessorNode):
             reid_iou_threshold = 0.2,
             motion_model_cfg = {
                 'enabled': False,
-                n_steps: 1,
-                center_only: True
+                'n_steps': 1,
+                'center_only': True
             },
             warp_mode = 'cv2.MOTION_EUCLIDEAN',
             number_of_iterations = 100,

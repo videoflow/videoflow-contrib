@@ -1,3 +1,5 @@
+import collections
+
 import torch
 import torch.nn.functional as F
 
@@ -31,7 +33,7 @@ class FRCNN_FPN(FasterRCNN):
 
         features = self.backbone(images.tensors)
         if isinstance(features, torch.Tensor):
-            features = OrderedDict([(0, features)])
+            features = collections.OrderedDict([(0, features)])
 
         # proposals, proposal_losses = self.rpn(images, features, targets)
         from torchvision.models.detection.transform import resize_boxes

@@ -1,5 +1,4 @@
 from collections import deque
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -38,7 +37,7 @@ class Tracker:
                 number_of_iterations,
                 termination_eps,
                 do_align = False
-        )
+        ):
 
         self.obj_detect = obj_detect
         self.reid_network = reid_network
@@ -64,7 +63,7 @@ class Tracker:
         self.im_index = 0
         self.results = {}
     
-    def reset(self, hard = True:
+    def reset(self, hard = True):
         self.tracks = []
         self.inactive_tracks = []
 
@@ -83,7 +82,7 @@ class Tracker:
         '''
         Initializes new Track objects and saves them
         '''
-        num_new = dew_det_pos.size(0)
+        num_new = new_det_pos.size(0)
         for i in range(num_new):
             self.tracks.append(Track(
                     new_det_pos[i].view(1, -1),
@@ -166,8 +165,8 @@ class Tracker:
             if len(self.inactive_trackers) >= 1:
                 dist_mat, pos = [], []
                 for t in self.inactive_tracks:
-                    dist_mat.append(torch.cat([t.test_features(feat.view(1, -1)) for fet in new_det_features], dim = 1))
-                    pos.append(t_pos)
+                    dist_mat.append(torch.cat([t.test_features(feat.view(1, -1)) for feat in new_det_features], dim = 1))
+                    pos.append(t.pos)
                 if len(dist_mat) > 1:
                     dist_mat = torch.cat(dist_mat, 0)
                     pos = torch.cat(pos, 0)
@@ -202,7 +201,7 @@ class Tracker:
                 for t in remove_inactive:
                     self.inactive_tracks.remove(t)
                 
-                keep = torch.Tensor([i for in in range(new_det_pos.size(0)) if i not in assigned]).long().cuda()
+                keep = torch.Tensor([i for i in range(new_det_pos.size(0)) if i not in assigned]).long().cuda()
                 if keep.nelement() > 0:
                     new_det_pos = new_det_pos[keep]
                     new_det_scores = new_det_scores[keep]
@@ -320,7 +319,7 @@ class Tracker:
             if len(self.tracks):
                 # nms here if tracks overlap
                 keep = nms(self.get_pos(), person_scores, self.regression_nms_thresh)
-                self.tracks_to_inactive([self.tracks[i] for in in list(range(len(self.tracks))) if i not in keep])
+                self.tracks_to_inactive([self.tracks[i] for i in list(range(len(self.tracks))) if i not in keep])
                 if keep.nelement() > 0:
                     if self.do_reid:
                         new_features = self.get_appearances(blob)
@@ -389,7 +388,7 @@ class Tracker:
                 bbox_and_score = im_indexes[frame_id]
                 to_return.append(np.concatenate([bbox_and_score, np.array([track_id])]))
         return np.array(to_return)
-        
+
     def get_results(self):
         return self.results
     
