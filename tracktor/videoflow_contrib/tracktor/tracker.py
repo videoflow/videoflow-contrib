@@ -331,7 +331,7 @@ class Tracker:
 		# !!! In the paper this is done by calculating the overlap with existing tracks, but the
 		# !!! result stays the same.
         if det_pos.nelement() > 0:
-            keep = nms(det_pos, det_scores, self.detection_nms_threshold)
+            keep = nms(det_pos, det_scores, self.detection_nms_thresh)
             det_pos = det_pos[keep]
             det_scores = det_scores[keep]
 
