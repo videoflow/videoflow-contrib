@@ -1,1 +1,1 @@
-from .tracktor import Tracktor
+from .tracktor import TracktorFromFrames

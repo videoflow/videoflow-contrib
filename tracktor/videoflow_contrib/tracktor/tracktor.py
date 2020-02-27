@@ -19,8 +19,9 @@ class TracktorFromFrames(OneTaskProcessorNode):
     https://github.com/phil-bergmann/tracking_wo_bnw
     '''
 
-    def __init__(self, interpolate):
+    def __init__(self, interpolate = False):
         self._tracker = None
+        self._interpolate = interpolate
         super(TracktorFromFrames, self).__init__()
     
     def open(self):
@@ -39,6 +40,8 @@ class TracktorFromFrames(OneTaskProcessorNode):
         reid_network.load_state_dict(
             torch.load(reid_model_path, map_location = lambda storage, loc: storage)
         )
+        reid_network.eval()
+        reid_network.cuda()
 
         #3. Creater tracker
         self._tracker = Tracker(
@@ -64,7 +67,6 @@ class TracktorFromFrames(OneTaskProcessorNode):
             termination_eps = 0.00001,
             do_align = False
         )
-        
 
     def process(self, frame):
         '''
@@ -72,7 +74,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
             - frame (np.array) (h, w, 3)
         
         - Returns:
-            - tracks: (np.array) (nb_boxes, 5) \
+            - tracks: (np.array) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
         self._tracker.step(frame)

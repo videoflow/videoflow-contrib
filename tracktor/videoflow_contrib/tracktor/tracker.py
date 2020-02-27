@@ -179,7 +179,6 @@ class Tracker:
                 iou_mask = torch.ge(iou, self.reid_iou_threshold)
                 iou_neg_mask = ~iou_mask
                 # Make all impossible assignments to the same add big value
-                # TODO: That 1000 is troublesome there.
                 dist_mat = dist_mat * iou_mask.float() + iou_neg_mask.float() * 1000
                 dist_mat = dist_mat.cpu().numpy()
 

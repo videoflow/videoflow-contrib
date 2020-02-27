@@ -1,5 +1,5 @@
-# To build: docker build -t tracks -f gpu.Dockerfile .
-# To run: nvidia-docker run -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e S3_BUCKET_VIDEOS -d tracks
+# To build: docker build -t tracking -f gpu.Dockerfile .
+# To run: nvidia-docker run -v </path/to/output/folder>:/home/user/videos -d tracking
 FROM nvidia/cuda:10.1-cudnn7-devel
 
 RUN apt-get update && apt-get install -y \
@@ -64,9 +64,16 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 RUN pip3 install numpy==1.17.4 scipy==1.3.2 
 
 # Installing videoflow
-RUN git clone https://github.com/videoflow/videoflow.git
+RUN git clone https://github.com/jadielam/videoflow.git
 RUN pip3 install --user /home/user/videoflow --find-links /home/user/videoflow
 
 # Installing videoflow_contrib packages
-RUN git clone https://github.com/videoflow/videoflow-contrib.git
+RUN git clone https://github.com/jadielam/videoflow-contrib.git
 RUN pip3 install --user /home/user/videoflow-contrib/tracktor --find-links /home/user/videoflow-contrib/tracktor
+
+# Copying and running scripts to track people
+RUN mkdir /home/user/examples
+RUN mkdir /home/user/videos
+COPY --chown=user:sudo examples/ /home/user/examples/
+RUN chmod u+x /home/user/examples/people_tracking.sh
+CMD ["/home/user/examples/people_tracking.sh"]
