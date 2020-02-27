@@ -45,7 +45,7 @@ def main():
         URL_VIDEO)
     reader = VideofileReader(input_file)
     frame = FrameIndexSplitter()(reader)
-    tracks = TracktorFromFrames(device_type = 'gpu')(frame)
+    tracks = TracktorFromFrames()(frame)
     tracks_to_annotator = TracksToAnnotator()(tracks)
     annotator = TrackerAnnotator()(frame, tracks_to_annotator)
     writer = VideofileWriter(output_file, fps = 30)(annotator)
