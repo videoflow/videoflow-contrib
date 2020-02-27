@@ -363,7 +363,7 @@ class Tracker:
         for t in self.tracks:
             if t.id not in self.results.keys():
                 self.results[t.id] = {}
-            self.results[t.id][self.im_index] = np.concatenate([t.pos[0].cpu().numpy(), np.array([t.score])])
+            self.results[t.id][self.im_index] = np.concatenate([t.pos[0].clone().cpu().numpy(), np.array([t.score])])
         
         for t in self.inactive_tracks:
             t.count_inactive += 1
@@ -381,11 +381,12 @@ class Tracker:
             -tracks: np.array of shape (nb_tracks, [xmin, ymin, xmax, ymax, score, track_id])
         '''
         to_return = []
-        for track_id, im_indexes in self.results:
+        for track_id, im_indexes in self.results.items():
             frame_id = self.im_index - 1
             if frame_id in im_indexes:
                 bbox_and_score = im_indexes[frame_id]
                 to_return.append(np.concatenate([bbox_and_score, np.array([track_id])]))
+        print(type(results))
         return np.array(to_return)
 
     def get_results(self):

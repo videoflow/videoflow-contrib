@@ -84,6 +84,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
         t_frame.unsqueeze_(0)
         self._tracker.step({'img': t_frame})
         results = self._tracker.get_current_tracks()
+        print(type(results))
         return results
     
 
