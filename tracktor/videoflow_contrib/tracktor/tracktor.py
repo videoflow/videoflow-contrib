@@ -4,6 +4,7 @@ from __future__ import absolute_import
 
 import torch
 import numpy as np
+from torchvision.transforms import ToTensor
 from videoflow.core.node import OneTaskProcessorNode
 from videoflow.utils.downloader import get_file
 
@@ -22,6 +23,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
 
     def __init__(self, device_type = 'gpu', interpolate = False):
         self._tracker = None
+        self._transform = ToTensor()
         self._interpolate = interpolate
         super(TracktorFromFrames, self).__init__(device_type = device_type)
     
@@ -78,7 +80,8 @@ class TracktorFromFrames(OneTaskProcessorNode):
             - tracks: (np.array) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
-        t_frame = torch.from_numpy(np.expand_dims(np.rollaxis(frame, 2, 0), axis = 0))
+        t_frame = self._transform(frame)
+        t_frame._unsqueeze_(0)
         self._tracker.step({'img': t_frame})
         results = self._tracker.get_current_tracks()
         return results
