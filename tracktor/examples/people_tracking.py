@@ -1,5 +1,7 @@
 import sys
 
+import numpy as np
+
 import videoflow
 import videoflow.core.flow as flow
 from videoflow.core.constants import BATCH

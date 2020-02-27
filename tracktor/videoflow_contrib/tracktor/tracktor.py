@@ -21,11 +21,11 @@ class TracktorFromFrames(OneTaskProcessorNode):
     https://github.com/phil-bergmann/tracking_wo_bnw
     '''
 
-    def __init__(self, device_type = 'gpu', interpolate = False):
+    def __init__(self, interpolate = False):
         self._tracker = None
         self._transform = ToTensor()
         self._interpolate = interpolate
-        super(TracktorFromFrames, self).__init__(device_type = device_type)
+        super(TracktorFromFrames, self).__init__(device_type = 'gpu')
     
     def open(self):
         #1. Load detection model
