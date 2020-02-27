@@ -11,8 +11,8 @@ from .frcnn_fpn import FRCNN_FPN
 from .reid import resnet50
 
 # TODO: Put the actual urls here
-URL_REID_MODEL = 'https://github.com/jadielam/videoflow-contrib/releases/download/tracktor/detection.pkl'
-URL_DETECTION_MODEL = 'https://github.com/jadielam/videoflow-contrib/releases/download/tracktor/reid.pkl'
+URL_REID_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/detection.pkl'
+URL_DETECTION_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/reid.pkl'
 
 class TracktorFromFrames(OneTaskProcessorNode):
     '''
