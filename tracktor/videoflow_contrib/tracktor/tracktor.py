@@ -10,8 +10,8 @@ from .tracker import Tracker
 from .frcnn_fpn import FRCNN_FPN
 from .reid import resnet50
 
-URL_REID_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/detection.pth'
-URL_DETECTION_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/reid.pth'
+URL_DETECTION_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/detection.pth'
+URL_REID_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/reid.pth'
 
 class TracktorFromFrames(OneTaskProcessorNode):
     '''
