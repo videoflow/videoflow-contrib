@@ -23,10 +23,21 @@ class TracktorFromFrames(OneTaskProcessorNode):
 
     def __init__(self, interpolate = False):
         self._tracker = None
-        self._transform = ToTensor()
         self._interpolate = interpolate
         super(TracktorFromFrames, self).__init__(device_type = 'gpu')
     
+    def _transform(self, pic):
+        if pic.ndim == 2:
+            pic = pic[:, :, None]
+
+        img = torch.from_numpy(pic.transpose((2, 0, 1)).copy())
+        
+        # backward compatibility
+        if isinstance(img, torch.ByteTensor):
+            return img.float().div(255)
+        else:
+            return img
+        
     def open(self):
         #1. Load detection model
         detection_model_path = get_file('detection.pkl', URL_DETECTION_MODEL)
@@ -80,6 +91,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
             - tracks: (np.array) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
+
         t_frame = self._transform(frame)
         t_frame.unsqueeze_(0)
         self._tracker.step({'img': t_frame})
