@@ -68,6 +68,7 @@ RUN git clone https://github.com/jadielam/videoflow.git
 RUN pip3 install --user /home/user/videoflow --find-links /home/user/videoflow
 
 # Installing videoflow_contrib packages
+RUN ls
 RUN git clone https://github.com/jadielam/videoflow-contrib.git
 RUN pip3 install --user /home/user/videoflow-contrib/tracktor --find-links /home/user/videoflow-contrib/tracktor
 
