@@ -77,7 +77,8 @@ class TracktorFromFrames(OneTaskProcessorNode):
             - tracks: (np.array) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
-        t_frame = torch.from_numpy(frame)
+        print(frame.shape)
+        t_frame = torch.from_numpy(np.rollaxis(frame, 2, 0))
         self._tracker.step({'img': t_frame})
         results = self._tracker.get_current_tracks()
         return results
