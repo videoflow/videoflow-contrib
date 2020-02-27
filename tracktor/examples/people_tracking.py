@@ -66,6 +66,7 @@ def main():
             index, next_frame = reader.next()
         except:
             break
+        print(next_frames.shape)
         tracks = track_from_frames.process(next_frame)
         transformed_tracks = tracks_to_annotator.process(tracks)
         annotated_frame = annotator.process(next_frame, tracks)
