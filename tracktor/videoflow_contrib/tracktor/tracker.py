@@ -381,7 +381,7 @@ class Tracker:
             -tracks: np.array of shape (nb_tracks, [xmin, ymin, xmax, ymax, score, track_id])
         '''
         to_return = []
-        for track_id, im_indexes in self.results:
+        for track_id, im_indexes in self.results.items():
             frame_id = self.im_index - 1
             if frame_id in im_indexes:
                 bbox_and_score = im_indexes[frame_id]
