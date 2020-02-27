@@ -36,7 +36,8 @@ class TracksToAnnotator(videoflow.core.node.ProcessorNode):
         - Returns:
             - tracks_for_annotator: np.array of shape (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
         '''
-        return np.array(tracks[:,[1,0,3,2,5]])
+        print(tracks)
+        return np.array(tracks[:,[0,1,2,3,5]])
 
 def main():
     output_file = sys.argv[1]
