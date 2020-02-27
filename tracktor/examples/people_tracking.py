@@ -10,7 +10,7 @@ from videoflow_contrib.tracktor import TracktorFromFrames
 
 from videoflow.utils.downloader import get_file
 
-BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow/releases/download/example_videos/"
+BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/"
 VIDEO_NAME = 'people_walking.mp4'
 URL_VIDEO = BASE_URL_EXAMPLES + VIDEO_NAME
 
