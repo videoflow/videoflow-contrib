@@ -36,8 +36,26 @@ class TracksToAnnotator(videoflow.core.node.ProcessorNode):
         - Returns:
             - tracks_for_annotator: np.array of shape (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
         '''
-        print(tracks)
-        return np.array(tracks[:,[0,1,2,3,5]])
+        try:
+            to_return = np.array(tracks[:,[0,1,2,3,5]])
+        except:
+            to_return = tracks
+        return to_return
+
+def main1():
+    output_file = sys.argv[1]
+    input_file = get_file(
+        VIDEO_NAME, 
+        URL_VIDEO)
+    reader = VideofileReader(input_file)
+    frame = FrameIndexSplitter()(reader)
+    tracks = TracktorFromFrames()(frame)
+    tracks_to_annotator = TracksToAnnotator()(tracks)
+    annotator = TrackerAnnotator()(frame, tracks_to_annotator)
+    writer = VideofileWriter(output_file, fps = 30)(annotator)
+    fl = flow.Flow([reader], [writer], flow_type = BATCH)
+    fl.run()
+    fl.join()
 
 def main():
     output_file = sys.argv[1]
@@ -86,4 +104,4 @@ def main():
     
     
 if __name__ == "__main__":
-    main()
+    main1()
