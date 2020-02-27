@@ -3,6 +3,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import torch
+import numpy as np
 from videoflow.core.node import OneTaskProcessorNode
 from videoflow.utils.downloader import get_file
 
