@@ -67,7 +67,11 @@ def main():
         except:
             break
         tracks = track_from_frames.process(next_frame)
-        transformed_tracks = tracks_to_annotator.process(tracks)
+        try:
+            transformed_tracks = tracks_to_annotator.process(tracks)
+        except Exception as e:
+            print(tracks.shape)
+            raise e
         annotated_frame = annotator.process(next_frame, tracks)
         writer.consume(annotated_frame)
 
