@@ -43,15 +43,42 @@ def main():
     input_file = get_file(
         VIDEO_NAME, 
         URL_VIDEO)
+    
     reader = VideofileReader(input_file)
-    frame = FrameIndexSplitter()(reader)
-    tracks = TracktorFromFrames()(frame)
-    tracks_to_annotator = TracksToAnnotator()(tracks)
-    annotator = TrackerAnnotator()(frame, tracks_to_annotator)
-    writer = VideofileWriter(output_file, fps = 30)(annotator)
-    fl = flow.Flow([reader], [writer], flow_type = BATCH)
-    fl.run()
-    fl.join()
+    reader.open()
+    frame_splitter = FrameIndexSplitter()
+    frame_splitter.open()
+    track_from_frames = TracktorFromFrames()
+    track_from_frames.open()
+    tracks_to_annotator = TracksToAnnotator()
+    tracks_to_annotator.open()
+    annotator = TrackerAnnotator()
+    annotator.open()
+    writer = VideofileWriter(output_file, fps = 8)
+    writer.open()
 
+    counter = 0
+    while True:
+        counter += 1
+        if counter % 10 == 0: 
+            print(counter)
+        try:
+            index, next_frame = reader.next()
+        except:
+            break
+        tracks = track_from_frames.process(next_frame)
+        transformed_tracks = tracks_to_annotator.process(tracks)
+        annotated_frame = annotator.process(next_frame, tracks)
+        writer.consume(annotated_frame)
+
+    reader.close()
+    frame_splitter.close()
+    track_from_frames.close()
+    tracks_to_annotator.close()
+    annotator.close()
+    writer.close()
+    
+    
+    
 if __name__ == "__main__":
     main()
