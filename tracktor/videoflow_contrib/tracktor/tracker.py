@@ -162,7 +162,7 @@ class Tracker:
                 blob['img'], new_det_pos
             ).data
 
-            if len(self.inactive_trackers) >= 1:
+            if len(self.inactive_tracks) >= 1:
                 dist_mat, pos = [], []
                 for t in self.inactive_tracks:
                     dist_mat.append(torch.cat([t.test_features(feat.view(1, -1)) for feat in new_det_features], dim = 1))
