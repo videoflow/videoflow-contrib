@@ -377,6 +377,19 @@ class Tracker:
         self.im_index += 1
         self.last_image = blob['img'][0]
     
+    def get_current_tracks(self):
+        '''
+        - Returns:
+            -tracks: np.array of shape (nb_tracks, [xmin, ymin, xmax, ymax, score, track_id])
+        '''
+        to_return = []
+        for track_id, im_indexes in self.results:
+            frame_id = self.im_index - 1
+            if frame_id in im_indexes:
+                bbox_and_score = im_indexes[frame_id]
+                to_return.append(np.concatenate([bbox_and_score, np.array([track_id])]))
+        return np.array(to_return)
+        
     def get_results(self):
         return self.results
     
