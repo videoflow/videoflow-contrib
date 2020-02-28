@@ -42,7 +42,7 @@ class TracksToAnnotator(videoflow.core.node.ProcessorNode):
             to_return = tracks
         return to_return
 
-def main1():
+def main():
     output_file = sys.argv[1]
     input_file = get_file(
         VIDEO_NAME, 
