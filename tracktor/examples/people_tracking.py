@@ -37,7 +37,7 @@ class TracksToAnnotator(videoflow.core.node.ProcessorNode):
             - tracks_for_annotator: np.array of shape (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
         '''
         try:
-            to_return = np.array(tracks[:,[1,0,3,2,5]])
+            to_return = np.array(tracks[:,[0,1,2,3,5]])
         except:
             to_return = tracks
         return to_return
@@ -56,52 +56,6 @@ def main1():
     fl = flow.Flow([reader], [writer], flow_type = BATCH)
     fl.run()
     fl.join()
-
-def main():
-    output_file = sys.argv[1]
-    input_file = get_file(
-        VIDEO_NAME, 
-        URL_VIDEO)
-    
-    reader = VideofileReader(input_file)
-    reader.open()
-    frame_splitter = FrameIndexSplitter()
-    frame_splitter.open()
-    track_from_frames = TracktorFromFrames()
-    track_from_frames.open()
-    tracks_to_annotator = TracksToAnnotator()
-    tracks_to_annotator.open()
-    annotator = TrackerAnnotator()
-    annotator.open()
-    writer = VideofileWriter(output_file, fps = 8)
-    writer.open()
-
-    counter = 0
-    while True:
-        print(counter)
-        counter += 1
-        
-        try:
-            index, next_frame = reader.next()
-        except:
-            break
-        tracks = track_from_frames.process(next_frame)
-        try:
-            transformed_tracks = tracks_to_annotator.process(tracks)
-        except Exception as e:
-            print(tracks.shape)
-            continue
-        annotated_frame = annotator.process(next_frame, tracks)
-        writer.consume(annotated_frame)
-
-    reader.close()
-    frame_splitter.close()
-    track_from_frames.close()
-    tracks_to_annotator.close()
-    annotator.close()
-    writer.close()
-    
-    
     
 if __name__ == "__main__":
-    main1()
+    main()
