@@ -125,10 +125,10 @@ class TracktorFromBoxes(OneTaskProcessorNode):
         
         - Returns:
             - bboxes: (torch.Tensor) (nb_boxes, 4)
-            - scores: (torch.Tensor) (nb_boxes, 1)
+            - scores: (torch.Tensor) (nb_boxes,)
         '''
         bboxes = torch.from_numpy(bounding_boxes[:, [0, 1, 2, 3]].astype('float').copy())
-        scores = torch.from_numpy(bounding_boxes[:, [4]].astype('float').copy())
+        scores = torch.from_numpy(bounding_boxes[:, 4].astype('float').copy())
         return bboxes, scores
     
     def open(self):

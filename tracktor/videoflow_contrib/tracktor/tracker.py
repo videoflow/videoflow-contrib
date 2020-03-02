@@ -105,7 +105,6 @@ class Tracker:
             boxes, scores = blob['boxes'], blob['scores']
             boxes = boxes.cuda()
             scores = scores.cuda()
-            print(type(scores))
         else:
             boxes, scores = self.obj_detect.predict_boxes(blob['img'], pos)
         pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
