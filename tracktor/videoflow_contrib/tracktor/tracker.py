@@ -101,7 +101,10 @@ class Tracker:
         Regresses the position of the tracks and also checks their scores
         '''
         pos = self.get_pos()
-        boxes, scores = self.obj_detect.predict_boxes(blob['img'], pos)
+        if self.public_detections:
+            boxes, scores = blob['boxes'], blob['scores']
+        else:
+            boxes, scores = self.obj_detect.predict_boxes(blob['img'], pos)
         pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
 
         s = []
