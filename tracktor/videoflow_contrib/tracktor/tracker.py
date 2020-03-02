@@ -103,6 +103,8 @@ class Tracker:
         pos = self.get_pos()
         if self.public_detections:
             boxes, scores = blob['boxes'], blob['scores']
+            boxes.cuda()
+            scores.cuda()
         else:
             boxes, scores = self.obj_detect.predict_boxes(blob['img'], pos)
         pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
