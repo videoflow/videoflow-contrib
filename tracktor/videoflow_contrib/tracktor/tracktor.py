@@ -132,6 +132,15 @@ class TracktorFromBoxes(OneTaskProcessorNode):
         return bboxes, scores
     
     def open(self):
+        #1. Load detection model
+        detection_model_path = get_file('detection.pkl', URL_DETECTION_MODEL)
+        obj_detect = FRCNN_FPN(num_classes = 2)
+        obj_detect.load_state_dict(
+            torch.load(detection_model_path, map_location = lambda storage, loc: storage)
+        )
+        obj_detect.eval()
+        obj_detect.cuda()
+
         #1. Load re-identification model
         reid_model_path = get_file('reid.pkl', URL_REID_MODEL)
         reid_network = resnet50(pretrained = False, **{'output_dim': 128})
@@ -143,7 +152,7 @@ class TracktorFromBoxes(OneTaskProcessorNode):
 
         #2. Create tracker
         self._tracker = Tracker(
-            None,
+            obj_detect,
             reid_network,
             detection_person_thresh = 0.5,
             regression_person_thresh = 0.5,
