@@ -187,5 +187,5 @@ class TracktorFromBoxes(OneTaskProcessorNode):
                 'scores': t_scores
             }
         )
-        results = self._tracker.et_current_tracks()
+        results = self._tracker.get_current_tracks()
         return results
