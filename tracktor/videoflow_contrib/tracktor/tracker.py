@@ -277,13 +277,12 @@ class Tracker:
         
         # 1. Look for new detections
         if self.public_detections:
-            dets = blob['dets'].squeeze(dim = 0)
-            if dets.nelement() > 0:
-                # TODO: I don't understand why the predict_boxes method needs to be 
-                # called here if the boxes are already provided.
-                boxes, scores = self.obj_detect.predict_boxes(blob['img'], dets)
-            else:
+            boxes, scores = blob['boxes'], blob['scores']
+            if boxes.nelement() == 0:
                 boxes = scores = torch.zeros(0).cuda()
+            else:
+                boxes.cuda()
+                scores.cuda()
         else:
             boxes, scores = self.obj_detect.detect(blob['img'])
         
