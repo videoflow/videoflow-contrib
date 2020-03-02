@@ -1,1 +1,1 @@
-from .tracktor import TracktorFromFrames
+from .tracktor import TracktorFromFrames, TracktorFromBoxes
