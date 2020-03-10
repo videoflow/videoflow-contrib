@@ -229,7 +229,12 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
         for t in reversed(to_del):
             self.trackers.pop(t)
-        matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function)
+        if self.metric_function_type == 'iou':
+            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, 0.1)
+        elif self.metric_function_type == 'euclidean':
+            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, -300)
+        else:
+            raise ValueError('Unrecognized metric function type')
 
         #update matched trackers with assigned detections
         d_to_t = {}
