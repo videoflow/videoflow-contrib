@@ -1,4 +1,4 @@
-from __future__ import print_functino
+from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
@@ -8,6 +8,7 @@ from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.utils.downloader import get_file
 
+from .retinaface import Retinaface
 
 BASE_URL_RETINAFACE = 'https://github.com/videoflow/videoflow-contrib/releases/download/retinaface/'
 
