@@ -8,7 +8,7 @@ from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.utils.downloader import get_file
 
-from .retinaface import Retinaface
+from .retinaface import RetinaFace
 
 BASE_URL_RETINAFACE = 'https://github.com/videoflow/videoflow-contrib/releases/download/retinaface/'
 
@@ -20,7 +20,7 @@ class RetinafaceDetector(ProcessorNode):
         self._scales = [1024, 1980]
         self._thresh = 0.8
         self._detector = None
-        super(Retinaface, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(RetinafaceDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
     
     def open(self):
         remote_params_url = BASE_URL_RETINAFACE + 'R50-0000.params'
