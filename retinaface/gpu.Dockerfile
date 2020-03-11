@@ -44,4 +44,4 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 	rm get-pip.py
 
 # Install mxnet
-RUN pip3 install mxnet-cu101==1.6.0
+RUN pip3 install mxnet-cu101==1.6.0 cython
