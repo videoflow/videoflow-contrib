@@ -1,16 +1,18 @@
-from setuptools import setup
-from setuptools import find_packages
-import os.path
+# --------------------------------------------------------
+# Fast R-CNN
+# Copyright (c) 2015 Microsoft
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Ross Girshick
+# --------------------------------------------------------
+
+import os
 from os.path import join as pjoin
-from distutils.core import Extension
+from setuptools import setup
+from distutils.extension import Extension
 from Cython.Distutils import build_ext
-from Cython.Build import cythonize
 import numpy as np
 
-name = 'videoflow_contrib_retinaface'
-install_requires = [
-    'videoflow'
-]
+
 def find_in_path(name, path):
     "Find a file in a search path"
     # Adapted fom
@@ -113,20 +115,20 @@ class custom_build_ext(build_ext):
 
 ext_modules = [
     Extension(
-        "videoflow_contrib.retinaface.rcnn.cython.bbox",
-        ["videoflow_contrib/retinaface/rcnn/cython/bbox.pyx"],
+        "bbox",
+        ["bbox.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
     Extension(
-        "videoflow_contrib.retinaface.rcnn.cython.anchors",
-        ["videoflow_contrib/retinaface/rcnn/cython/anchors.pyx"],
+        "anchors",
+        ["anchors.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
     Extension(
-        "videoflow_contrib.retinaface.rcnn.cython.cpu_nms",
-        ["videoflow_contrib/retinaface/rcnn/cython/cpu_nms.pyx"],
+        "cpu_nms",
+        ["cpu_nms.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs = [numpy_include]
     ),
@@ -134,8 +136,8 @@ ext_modules = [
 
 if CUDA is not None:
     ext_modules.append(
-        Extension('videoflow_contrib.retinaface.rcnn.cython.gpu_nms',
-            ['videoflow_contrib/retinaface/rcnn/cython/nms_kernel.cu', 'rcnn/cython/gpu_nms.pyx'],
+        Extension('gpu_nms',
+            ['nms_kernel.cu', 'gpu_nms.pyx'],
             library_dirs=[CUDA['lib64']],
             libraries=['cudart'],
             language='c++',
@@ -155,37 +157,10 @@ if CUDA is not None:
 else:
     print('Skipping GPU_NMS')
 
-setup(name=name,
-      version='0.1',
-      description='Mxnet model to detect faces',
-      author='Jadiel de Armas',
-      author_email='jadielam@gmail.com',
-      url='https://github.com/videoflow/videoflow-contrib',
-      license='MIT',
-      packages = ['videoflow_contrib.retinaface', 
-                    'videoflow_contrib.retinaface.rcnn',
-                    'videoflow_contrib.retinaface.rcnn.processing'
-      ],
-      ext_modules = ext_modules,
-      cmdclass = {'build_ext': custom_build_ext},
-      zip_safe = False,
-      install_requires=install_requires,
-      extras_require={
-          'visualize': ['pydot>=1.2.0'],
-          'tests': ['pytest',
-                    'pytest-pep8',
-                    'pytest-xdist',
-                    'pytest-cov'],
-      },
-      classifiers=[
-          'Development Status :: 3 - Alpha',
-          'Intended Audience :: Developers',
-          'Intended Audience :: Education',
-          'Intended Audience :: Science/Research',
-          'License :: OSI Approved :: MIT License',
-          'Programming Language :: Python :: 3',
-          'Programming Language :: Python :: 3.6',
-          'Topic :: Software Development :: Libraries',
-          'Topic :: Software Development :: Libraries :: Python Modules'
-      ]
+
+setup(
+    name='frcnn_cython',
+    ext_modules=ext_modules,
+    # inject our custom trigger
+    cmdclass={'build_ext': custom_build_ext},
 )

@@ -12,11 +12,11 @@ import numpy as np
 import mxnet as mx
 from mxnet import ndarray as nd
 import cv2
-from rcnn.logger import logger
-from rcnn.processing.bbox_transform import clip_boxes
-from rcnn.processing.generate_anchor import generate_anchors_fpn, anchors_plane
-from rcnn.processing.nms import gpu_nms_wrapper, cpu_nms_wrapper
-from rcnn.processing.bbox_transform import bbox_overlaps
+from .rcnn.logger import logger
+from .rcnn.processing.bbox_transform import clip_boxes
+from .rcnn.processing.generate_anchor import generate_anchors_fpn, anchors_plane
+from .rcnn.processing.nms import gpu_nms_wrapper, cpu_nms_wrapper
+from .rcnn.processing.bbox_transform import bbox_overlaps
 
 class RetinaFace:
   def __init__(self, prefix, epoch, ctx_id=0, network='net3', nms=0.4, nocrop=False, decay4 = 0.5, vote=False):
