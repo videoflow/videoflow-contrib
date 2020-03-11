@@ -22,13 +22,19 @@ class RetinafaceDetector(ProcessorNode):
         super(Retinaface, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
     
     def open(self):
-        remote_url = BASE_URL_RETINAFACE + 'R50-0000.params'
-        path_to_model_file = get_file('R50-0000.params', remote_url)
+        remote_params_url = BASE_URL_RETINAFACE + 'R50-0000.params'
+        remote_config_url = BASE_URL_RETINAFACE + 'R50-symbol.json'
+
+        path_to_params_file = get_file('R50-0000.params', remote_params_url)
+        path_to_config_file = get_file('R50-symbol.json', remote_config_url)
+        prefix_idx = path_to_params_file.find('-0000.params')
+        prefix = path_to_params_file[0 : prefix_idx]
+
         if self.device_type == CPU:
             ctx_id = -1
         elif self.device_type == GPU:
             ctx_id = 0
-        self._detector = RetinaFace(path_to_model_file, 0, ctx_id, 'net3')
+        self._detector = RetinaFace(prefix, 0, ctx_id, 'net3')
     
     def process(self, img: np.array):
         '''
