@@ -82,9 +82,9 @@ RUN git clone https://github.com/videoflow/videoflow.git
 RUN pip3 install --user /home/user/videoflow --find-links /home/user/videoflow
 
 # Installing videoflow_contrib packages
-RUN git clone https://github.com/jadielam/videoflow-contrib.git
+RUN git clone https://github.com/videoflow/videoflow-contrib.git
 RUN pip3 install --user /home/user/videoflow-contrib/detectron2 --find-links /home/user/videoflow-contrib/detectron2
 
 # Command to run example here
-CMD ["python3", "/home/user/videoflow_contrib/detectron2/examples/humanpose_example.py"]
+CMD ["python3", "/home/user/videoflow-contrib/detectron2/examples/humanpose_example.py"]
 
