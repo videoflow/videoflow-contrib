@@ -6,6 +6,11 @@ from videoflow.consumers import VideofileWriter
 from videoflow.core.constants import BATCH
 from videoflow.producers import VideofileReader
 from videoflow_contrib.detectron2 import Detectron2HumanPose, HumanPoseAnnotator
+from videoflow.utils.downloader import get_file
+
+BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/"
+VIDEO_NAME = 'people_walking.mp4'
+URL_VIDEO = BASE_URL_EXAMPLES + VIDEO_NAME
 
 
 class FrameIndexSplitter(videoflow.core.node.ProcessorNode):
@@ -37,7 +42,9 @@ def annotate_video(video_filepath):
     fl.run()
     fl.join()
 
-
-if __name__ == "__main__":
-    video_filepath = sys.argv[1]
+if __name__ == '__main__':
+    video_filepath = get_file(
+        VIDEO_NAME,
+        URL_VIDEO
+    )
     annotate_video(video_filepath)

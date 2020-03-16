@@ -135,7 +135,7 @@ ext_modules = [
 if CUDA is not None:
     ext_modules.append(
         Extension('videoflow_contrib.retinaface.rcnn.cython.gpu_nms',
-            ['videoflow_contrib/retinaface/rcnn/cython/nms_kernel.cu', 'rcnn/cython/gpu_nms.pyx'],
+            ['videoflow_contrib/retinaface/rcnn/cython/nms_kernel.cu', 'videoflow_contrib/retinaface/rcnn/cython/gpu_nms.pyx'],
             library_dirs=[CUDA['lib64']],
             libraries=['cudart'],
             language='c++',
