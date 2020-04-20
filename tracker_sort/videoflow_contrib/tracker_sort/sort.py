@@ -184,6 +184,7 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         - min_hits: A tracklet is considered a valid track if it has a hit streak larger \
             than or equal to ``min_hits``
         - metric_function_type : str, one of ``iou`` or ``euclidean`` 
+        - metric_function_threshold: for ``iou`` the default is 0.3. For ``euclidean`` it is 100.
         - show_in_between: If set to True, it will return tracks of bounding boxes even if they were
             not detected by the detector.  If set to False, it will return only the tracks for the 
             bounding boxes detected in this frame by the detector. Note that when set to False, it
@@ -192,12 +193,22 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
             If for some reason an original det does not have a corresponding track, the track index is -1
     '''
     
-    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', show_in_between = True, return_original_dets = False):
+    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', metric_function_threshold = None, show_in_between = True, return_original_dets = False):
         self.max_age = max_age
         self.min_hits = min_hits
         self.trackers = []
         self.frame_count = 0
         self.metric_function_type = metric_function_type
+        
+        if metric_function_threshold is None:
+            if self.metric_function_type == 'iou':
+                self.metric_function_threshold = 0.3
+            elif self.metric_function_type == 'euclidean':
+                self.metric_function_threshold = 100
+            else:
+                raise ValueError(f'Unknown metric function type: {self.metric_function_type}')
+        else:
+            self.metric_function_threshold = metric_function_threshold
         self.previous_fid = -1
         self.return_original_dets = return_original_dets
         self.show_in_between = show_in_between
@@ -230,9 +241,9 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         for t in reversed(to_del):
             self.trackers.pop(t)
         if self.metric_function_type == 'iou':
-            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, 0.1)
+            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, self.metric_function_threshold)
         elif self.metric_function_type == 'euclidean':
-            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, -300)
+            matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, self.metric_function_threshold * -1)
         else:
             raise ValueError('Unrecognized metric function type')
 
