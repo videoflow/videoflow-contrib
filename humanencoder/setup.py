@@ -5,7 +5,7 @@ import os.path
 name = 'videoflow_contrib_humanencoder'
 install_requires = [
     'videoflow',
-    'scipy==1.3.3',
+    'scipy==1.10.0',
     'scikit-learn==0.20.0'
 ]
 
