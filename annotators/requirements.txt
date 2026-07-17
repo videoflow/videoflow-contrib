@@ -1,1 +1,1 @@
-# No extra Python deps: OpenCV + NumPy already come from videoflow-base.
+# No extra Python deps: OpenCV + NumPy come from videoflow-base.

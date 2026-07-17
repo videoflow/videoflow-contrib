@@ -12,13 +12,15 @@ from timeit import default_timer as timer  ### to calculate FPS
 
 from PIL import Image
 import numpy as np
-# Standalone Keras 2 is unmaintained; use tf.compat.v1.keras on TensorFlow 2 and keep
-# graph-mode session semantics (K.get_session()/K.placeholder()/sess.run) by disabling
-# v2 behaviour. Runs on modern TF2 / Python 3.9-3.12.
+# This node uses the Keras 2 graph-mode backend (K.get_session()/K.placeholder()/
+# K.learning_phase()). On TensorFlow >= 2.16 the bundled Keras is Keras 3, which drops
+# that API, so we use the legacy Keras 2 package ``tf-keras`` (install it and set
+# TF_USE_LEGACY_KERAS=1 — see the Dockerfile). tf.compat.v1 + disable_v2_behavior keeps
+# graph-mode session semantics. Runs on TF2 / Python 3.12.
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
-from tensorflow.compat.v1.keras import backend as K
-from tensorflow.compat.v1.keras.models import load_model
+from tf_keras import backend as K
+from tf_keras.models import load_model
 from PIL import Image, ImageFont, ImageDraw
 
 from videoflow.utils.downloader import get_file

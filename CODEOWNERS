@@ -1,4 +1,3 @@
 # processors
 videoflow_contrib/processors/identity.py @jadielam
-videoflow_contrib/processors/annotators/object_annotator.py @rominf
-videoflow_contrib/processors/person_reid @rominf
+annotators/videoflow_contrib/annotators/object_annotator.py @rominf

@@ -1,4 +1,4 @@
-# videoflow-contrib :: segmentation_tf — TensorFlow-2 instance segmenter (GPU).
+# videoflow-contrib :: humanencoder — TensorFlow-2 person appearance encoder (GPU).
 #
 # GPU worker image for the new distributed videoflow (Python 3.12 + CUDA). Builds on
 # videoflow-base:py3.12-cuda and adds this component's CUDA-enabled dependencies.
@@ -6,7 +6,7 @@
 #
 # Prerequisite (from the videoflow repo root):  ./docker/build-images.sh
 # Build (context = this module directory):
-#   docker build -f segmentation_tf/gpu.Dockerfile -t videoflow-contrib-segmentation_tf:gpu segmentation_tf/
+#   docker build -f humanencoder/gpu.Dockerfile -t videoflow-contrib-humanencoder:gpu humanencoder/
 ARG BASE_IMAGE=videoflow-base:py3.12-cuda
 FROM ${BASE_IMAGE}
 
@@ -16,7 +16,7 @@ WORKDIR /app
 COPY requirements-gpu.txt ./requirements.txt
 RUN uv pip install --system --break-system-packages --no-cache -r requirements.txt
 
-# The videoflow_contrib.segmentation_tf package (importable by its module path, which is what
+# The videoflow_contrib.humanencoder package (importable by its module path, which is what
 # appears in VF_NODE_CLASS). --no-deps: videoflow is already present in the base image.
 COPY . ./
 RUN uv pip install --system --break-system-packages --no-cache --no-deps .

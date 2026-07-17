@@ -1,90 +1,36 @@
-# To build: docker build -t detectron2 -f gpu.Dockerfile .
-# To run: nvidia-docker run -it detectron2
-FROM nvidia/cuda:10.1-cudnn7-devel
+# videoflow-contrib :: detectron2 — Detectron2 human-pose estimator (PyTorch) — GPU.
+#
+# GPU worker image for the new distributed videoflow (Python 3.12 + CUDA 12.4). Builds
+# on videoflow-base:py3.12-cuda (a CUDA -devel image, so nvcc is present to compile
+# detectron2's CUDA kernels). Schedule the pods onto GPU nodes (nvidia.com/gpu + the
+# NVIDIA runtime).
+#
+# Prerequisite (from the videoflow repo root):  ./docker/build-images.sh
+# Build (context = this module directory):
+#   docker build -f detectron2/gpu.Dockerfile -t videoflow-contrib-detectron2:gpu detectron2/
+ARG BASE_IMAGE=videoflow-base:py3.12-cuda
+FROM ${BASE_IMAGE}
 
-RUN apt-get update && apt-get install -y \
-    curl \
-    ca-certificates \
-    sudo \
-    git \
-    wget \
-    bzip2 \
-    libx11-6 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
- && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# create a non-root user
-ARG USER_ID=1000
-RUN useradd -m --no-log-init --system  --uid ${USER_ID} user -g sudo
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER user
-WORKDIR /home/user
+# Toolchain + git for the source build (nvcc comes from the -devel CUDA base).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential git && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Miniconda
-RUN curl -so ~/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh \
- && chmod +x ~/miniconda.sh \
- && ~/miniconda.sh -b -p ~/miniconda \
- && rm ~/miniconda.sh
-ENV PATH=/home/user/miniconda/bin:$PATH
-ENV CONDA_AUTO_UPDATE_CONDA=false
+# 1. CUDA 12.4 PyTorch first — detectron2's build imports torch and matches its CUDA.
+RUN uv pip install --system --break-system-packages --no-cache \
+        --index-url https://download.pytorch.org/whl/cu124 \
+        'torch>=2.4' 'torchvision>=0.19'
 
-# Create a Python 3.6 environment
-RUN /home/user/miniconda/bin/conda create -y --name py36 python=3.6.9 \
- && /home/user/miniconda/bin/conda clean -ya
-ENV CONDA_DEFAULT_ENV=py36
-ENV CONDA_PREFIX=/home/user/miniconda/envs/$CONDA_DEFAULT_ENV
-ENV PATH=$CONDA_PREFIX/bin:$PATH
-RUN /home/user/miniconda/bin/conda install conda-build=3.18.9=py36_3 \
- && /home/user/miniconda/bin/conda clean -ya
-
- # CUDA 10.1-specific steps
-RUN conda install -y -c pytorch \
-    cudatoolkit=10.1 \
-    "pytorch=1.4.0=py3.6_cuda10.1.243_cudnn7.6.3_0" \
-    "torchvision=0.5.0=py36_cu101" \
- && conda clean -ya
-
- # Install OpenCV3 Python bindings
-RUN sudo apt-get update && sudo apt-get install -y --no-install-recommends \
-    libgtk2.0-0 \
-    libcanberra-gtk-module \
- && sudo rm -rf /var/lib/apt/lists/*
-RUN conda install -y -c menpo opencv3=3.1.0 \
- && conda clean -ya
-
- # Installing pip3
-ENV PATH="/home/user/.local/bin:${PATH}"
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	python3 get-pip.py --user && \
-	rm get-pip.py
-
-# Install detectron2, pointing it to an specific id, 
-# since repo does not have tag as of December 18, 2019
-RUN pip3 install --user 'git+https://github.com/cocodataset/cocoapi.git@636becdc73d54283b3aac6d4ec363cffbb6f9b20#subdirectory=PythonAPI'
-RUN pip3 install --user 'git+https://github.com/facebookresearch/fvcore@8694adf300c4e47d575ad1583bfb9d646fe9c12c'
-RUN pip3 install --user -U pillow==6.1
-
+# 2. Build detectron2 from source with CUDA ops enabled (FORCE_CUDA=1 so the CUDA
+#    kernels are compiled even though no GPU is visible during the image build).
 ENV FORCE_CUDA=1
-RUN git clone https://github.com/facebookresearch/detectron2 detectron2_repo
-RUN cd detectron2_repo && git checkout feaa5028c540101c1fbc84e0daf9c36d15550f4a
-# The line below targets all GPUs, but makes installation slower. If you know the exact
-# GPU that you are targeting, feel free to modify line below.
-ENV TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing"
-RUN pip install --user -e detectron2_repo
+RUN uv pip install --system --break-system-packages --no-cache \
+        'git+https://github.com/facebookresearch/detectron2.git'
 
-# Set a fixed model cache directory.
-ENV FVCORE_CACHE="/tmp"
+# 3. The videoflow_contrib.detectron2 package. --no-deps: videoflow is already in base.
+COPY . ./
+RUN uv pip install --system --break-system-packages --no-cache --no-deps .
 
-# Installing videoflow
-RUN git clone https://github.com/videoflow/videoflow.git
-RUN pip3 install --user /home/user/videoflow --find-links /home/user/videoflow
-
-# Installing videoflow_contrib packages
-RUN git clone https://github.com/videoflow/videoflow-contrib.git
-RUN pip3 install --user /home/user/videoflow-contrib/detectron2 --find-links /home/user/videoflow-contrib/detectron2
-
-# Command to run example here
-CMD ["python3", "/home/user/videoflow-contrib/detectron2/examples/humanpose_example.py"]
-
+# ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from the base image.

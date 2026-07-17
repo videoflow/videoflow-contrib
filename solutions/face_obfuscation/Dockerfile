@@ -1,19 +1,20 @@
-# videoflow-contrib :: solutions/face_obfuscation — detect + track + blur faces.
+# videoflow-contrib :: solutions/face_obfuscation — detect + track + blur faces — CPU.
 #
 # This solution's graph (face_obfuscation.py:build_flow) wires together nodes from
 # videoflow_contrib.detector_tf (TensorFlow) and videoflow_contrib.tracker_sort, plus
 # a couple of local nodes defined in the script itself. All node classes must be
 # importable in the worker, so this image installs both sub-packages AND the script
 # module (importable as `face_obfuscation`, which is how its local nodes appear in
-# VF_NODE_CLASS). Python is pinned to 3.11 because of the TensorFlow-2 (Keras-2) node.
+# VF_NODE_CLASS). Python 3.12.
 #
 # Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
 #   docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-contrib-face-obfuscation:latest .
+# A GPU build is available: docker build -f solutions/face_obfuscation/gpu.Dockerfile -t videoflow-contrib-face-obfuscation:gpu .
 #
 # Deploy (input path comes from VF_INPUT_VIDEO at runtime):
 #   videoflow deploy face_obfuscation.py:build_flow --nats nats://... \
 #       --image videoflow-contrib-face-obfuscation:latest
-ARG BASE_IMAGE=videoflow-base:py3.11
+ARG BASE_IMAGE=videoflow-base:py3.12
 FROM ${BASE_IMAGE}
 
 WORKDIR /app

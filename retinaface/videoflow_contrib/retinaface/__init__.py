@@ -1,1 +1,0 @@
-from .retinaface_detector import RetinafaceDetector

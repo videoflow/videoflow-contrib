@@ -1,6 +1,5 @@
-# torch/torchvision are installed first (see Dockerfile) because detectron2 needs them
-# at build time. tensorflow (Keras 2) backs the humanencoder node; scipy backs deepsort.
-torch>=2.1
-torchvision>=0.16
-tensorflow>=2.13,<2.16
-scipy>=1.10
+# torch is installed via the PyTorch index in the Dockerfile (CPU wheels); detectron2
+# is built from source there. tensorflow (frozen-graph humanencoder) + scipy (deepsort)
+# come from here.
+tensorflow>=2.16,<2.18
+scipy>=1.11

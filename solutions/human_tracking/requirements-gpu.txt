@@ -1,0 +1,4 @@
+# torch (CUDA) is installed via the PyTorch index in the Dockerfile; detectron2 is
+# built from source with CUDA ops there. CUDA TensorFlow + scipy come from here.
+tensorflow[and-cuda]>=2.16,<2.18
+scipy>=1.11

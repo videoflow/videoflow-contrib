@@ -1,47 +1,24 @@
-# To build: docker build -t detector_tf -f Dockerfile .
-# To run: nvidia-docker run -it detector_tf
-FROM tensorflow/tensorflow:1.14.0-gpu-py3
+# videoflow-contrib :: detector_tf — TensorFlow-2 object detector (GPU).
+#
+# GPU worker image for the new distributed videoflow (Python 3.12 + CUDA). Builds on
+# videoflow-base:py3.12-cuda and adds this component's CUDA-enabled dependencies.
+# Schedule the resulting pods onto GPU nodes (nvidia.com/gpu + the NVIDIA runtime).
+#
+# Prerequisite (from the videoflow repo root):  ./docker/build-images.sh
+# Build (context = this module directory):
+#   docker build -f detector_tf/gpu.Dockerfile -t videoflow-contrib-detector_tf:gpu detector_tf/
+ARG BASE_IMAGE=videoflow-base:py3.12-cuda
+FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN echo "deb http://old-releases.ubuntu.com/ubuntu/ yakkety universe" | tee -a /etc/apt/sources.list
-RUN apt-get update && apt-get install -y \ 
- wget \
- git \
- pkg-config \
- ffmpeg \
- pkg-config \
- python-dev \ 
- python-opencv \ 
- libopencv-dev \ 
- libav-tools  \ 
- libjpeg-dev \ 
- libpng-dev \ 
- libtiff-dev \ 
- libjasper-dev \ 
- python-numpy \ 
- python-pycurl \ 
- python-opencv
+WORKDIR /app
+# Component dependencies (on top of videoflow-base's built-in node deps: OpenCV,
+# ffmpeg, NumPy, the NATS client, Redis, PyYAML).
+COPY requirements-gpu.txt ./requirements.txt
+RUN uv pip install --system --break-system-packages --no-cache -r requirements.txt
 
-# create a non-root user
-ARG USER_ID=1000
-RUN useradd -m --no-log-init --system  --uid ${USER_ID} appuser -g sudo
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER appuser
-WORKDIR /home/appuser
+# The videoflow_contrib.detector_tf package (importable by its module path, which is what
+# appears in VF_NODE_CLASS). --no-deps: videoflow is already present in the base image.
+COPY . ./
+RUN uv pip install --system --break-system-packages --no-cache --no-deps .
 
-ENV PATH="/home/appuser/.local/bin:${PATH}"
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	python3 get-pip.py --user && \
-	rm get-pip.py
-
-# Installing videoflow
-RUN git clone https://github.com/videoflow/videoflow.git
-RUN pip3 install --user /home/appuser/videoflow --find-links /home/appuser/videoflow
-
-# Installing videoflow_contrib.detector_tf
-RUN mkdir -p /home/appuser/videoflow_contrib/detector_tf
-COPY . /home/appuser/videoflow_contrib/detector_tf
-RUN pip3 install --user /home/appuser/videoflow_contrib/detector_tf --find-links /home/appuser/videoflow_contrib/detector_tf
-
-# Command to run example
-CMD ["python3", "/home/appuser/videoflow_contrib/detector_tf/examples/object_detector.py"]
+# ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from the base image.
