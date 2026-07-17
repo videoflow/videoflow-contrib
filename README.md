@@ -16,6 +16,27 @@ Each folder in the repository corresponds to an individual sub-package that foll
 
 See the [Tensorflow Object detection](detector_tf) sub-package for an example of how to structure ``videoflow_contrib`` sub-packages.  Each sub-package should have a ``setup.py`` file and a ``Dockerfile`` that describes the environment needed to use it.
 
+## Component descriptors
+
+Each component also ships a `component.yaml` **descriptor** — the machine-readable
+manifest that makes it a first-class, distributable videoflow component: its name and
+version, the container images (cpu/gpu), the Python class it provides, a JSON Schema
+for its constructor params, its input/output payload types, its device support, and
+constraints (e.g. `singleton` for stateful trackers). This is the contract the
+videoflow marketplace uses to discover, validate, and (eventually) resolve a component
+by reference.
+
+Validate every descriptor against the videoflow schema before pushing:
+
+```bash
+./validate-components.sh            # or: videoflow component validate detector_tf/
+```
+
+CI (`.github/workflows/components.yml`) runs this on every push, plus a check that each
+sub-package's `setup.py` is installable. When you add a component, add a `component.yaml`
+next to its `setup.py` (copy the closest existing one and adjust `pythonClass`, `params.schema`,
+and `io`).
+
 ## Example Usage
 Consumers, producers and processors from the Videoflow-contrib library are used
 in the same way as the components within Videoflow itself.

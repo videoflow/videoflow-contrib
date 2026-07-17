@@ -1,0 +1,27 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/yolo
+  version: "0.1"
+  license: MIT
+  description: YOLOv3 object detector (TensorFlow/Keras) emitting per-frame detection boxes.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.yolo.YOLO
+    images:
+      cpu: ghcr.io/videoflow/contrib-yolo:0.1
+      gpu: ghcr.io/videoflow/contrib-yolo:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        model_path: {type: ["string", "null"], default: null, description: Local .h5 weights; if null, the default YOLOv3 model is fetched.}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}
+  constraints: {partitionable: true}

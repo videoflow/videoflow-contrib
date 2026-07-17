@@ -1,0 +1,33 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/detector-tf
+  version: "0.1"
+  license: MIT
+  description: TensorFlow 2 object detector (SSD/Faster-RCNN family) emitting per-frame detection boxes.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    # Python component: run by `python -m videoflow.worker`, which imports this class.
+    # Built from this directory's Dockerfile / gpu.Dockerfile FROM videoflow-base.
+    pythonClass: videoflow_contrib.detector_tf.TensorflowObjectDetector
+    images:
+      cpu: ghcr.io/videoflow/contrib-detector-tf:0.1
+      gpu: ghcr.io/videoflow/contrib-detector-tf:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        num_classes: {type: integer, default: 90, minimum: 1}
+        path_to_pb_file: {type: ["string", "null"], default: null, description: Local frozen graph; if null, a model is fetched by architecture+dataset.}
+        architecture: {type: string, default: ssd-resnet50-fpn}
+        dataset: {type: string, default: coco}
+        min_score_threshold: {type: number, default: 0.5, minimum: 0, maximum: 1}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}   # (nb_boxes, 6): [x1, y1, x2, y2, score, class_id]
+  constraints: {partitionable: true}

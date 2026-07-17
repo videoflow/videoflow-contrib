@@ -1,0 +1,38 @@
+name: components
+
+# Validate every component descriptor against the videoflow component schema, and
+# check each sub-package's setup.py declares its name/version (catches an empty or
+# broken setup.py before an image build would fail on `pip install .`).
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  validate-descriptors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install videoflow (deploy extra: brings the component CLI + jsonschema)
+        run: pip install "videoflow[deploy] @ git+https://github.com/videoflow/videoflow" jsonschema
+      - name: Validate component descriptors
+        run: ./validate-components.sh
+
+  check-packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Every sub-package's setup.py declares a name and version
+        run: |
+          set -euo pipefail
+          for d in */setup.py; do
+            dir="$(dirname "$d")"
+            echo "== $dir =="
+            ( cd "$dir" && python setup.py --name --version )
+          done

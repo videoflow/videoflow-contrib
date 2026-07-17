@@ -1,0 +1,31 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/segmentation-tf
+  version: "0.1"
+  license: MIT
+  description: TensorFlow 2 instance segmenter (Mask-RCNN family) emitting per-frame masks/boxes.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.segmentation_tf.TensorflowSegmenter
+    images:
+      cpu: ghcr.io/videoflow/contrib-segmentation-tf:0.1
+      gpu: ghcr.io/videoflow/contrib-segmentation-tf:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        num_classes: {type: integer, default: 90, minimum: 1}
+        path_to_pb_file: {type: ["string", "null"], default: null}
+        architecture: {type: string, default: maskrcnn-inceptionv2}
+        dataset: {type: string, default: coco}
+        min_score_threshold: {type: number, default: 0.5, minimum: 0, maximum: 1}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}
+  constraints: {partitionable: true}

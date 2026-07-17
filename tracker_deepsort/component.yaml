@@ -1,0 +1,28 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/tracker-deepsort
+  version: "0.1"
+  license: MIT
+  description: Deep SORT multi-object tracker (appearance features + Kalman). Stateful across frames, single task.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.tracker_deepsort.DeepSort
+    images:
+      cpu: ghcr.io/videoflow/contrib-tracker-deepsort:0.1
+  device: [cpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        min_height: {type: integer, default: 0, minimum: 0}
+        max_cosine_distance: {type: number, default: 0.2, minimum: 0}
+        nn_budget: {type: ["integer", "null"], default: null}
+  io:
+    inputs:
+      - {name: detections_with_features, type: videoflow.v1.Tensor}   # (nb_boxes, 133)
+    output: {type: videoflow.v1.Tensor}                               # (nb_boxes, 5)
+  constraints: {singleton: true}

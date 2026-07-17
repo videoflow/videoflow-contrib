@@ -1,0 +1,29 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/humanencoder
+  version: "0.1"
+  license: MIT
+  description: TensorFlow 2 human appearance encoder producing per-detection embedding features (for re-id / tracking).
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.humanencoder.HumanEncoder
+    images:
+      cpu: ghcr.io/videoflow/contrib-humanencoder:0.1
+      gpu: ghcr.io/videoflow/contrib-humanencoder:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        path_to_pb_file: {type: ["string", "null"], default: null}
+        batch_size: {type: integer, default: 32, minimum: 1}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+      - {name: detections, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}
+  constraints: {partitionable: true}

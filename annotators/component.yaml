@@ -1,0 +1,31 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/annotators
+  version: "0.1"
+  license: MIT
+  description: Draws detection/track boxes and labels onto frames (OpenCV, no ML deps).
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.annotators.ObjectAnnotator
+    images:
+      cpu: ghcr.io/videoflow/contrib-annotators:0.1
+  device: [cpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      required: [class_labels]
+      properties:
+        class_labels: {type: object, description: "Mapping of class id (as string key) to display label."}
+        box_color: {type: array, items: {type: integer}, default: [255, 225, 0]}
+        box_thickness: {type: integer, default: 2, minimum: 1}
+        text_color: {type: array, items: {type: integer}, default: [255, 255, 0]}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+      - {name: detections, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}
+  constraints: {partitionable: true}

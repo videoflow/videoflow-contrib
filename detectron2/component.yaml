@@ -1,0 +1,29 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/detectron2-humanpose
+  version: "0.1"
+  license: MIT
+  description: Detectron2 (PyTorch) human pose estimator emitting per-frame keypoints.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.detectron2.Detectron2HumanPose
+    images:
+      cpu: ghcr.io/videoflow/contrib-detectron2:0.1
+      gpu: ghcr.io/videoflow/contrib-detectron2:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        path_to_model_file: {type: ["string", "null"], default: null}
+        path_to_model_config: {type: ["string", "null"], default: null}
+        architecture: {type: string, default: R50_FPN_3x}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}
+  constraints: {partitionable: true}
