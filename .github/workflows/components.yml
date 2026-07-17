@@ -1,8 +1,8 @@
 name: components
 
 # Validate every component descriptor against the videoflow component schema, and
-# check each sub-package's setup.py declares its name/version (catches an empty or
-# broken setup.py before an image build would fail on `pip install .`).
+# check each sub-package builds a wheel from its pyproject.toml (catches a broken
+# package definition before an image build would fail on `uv pip install .`).
 on:
   push:
     branches: [master]
@@ -25,14 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Every sub-package's setup.py declares a name and version
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Every sub-package builds a wheel from its pyproject.toml
         run: |
           set -euo pipefail
-          for d in */setup.py; do
+          for d in */pyproject.toml; do
             dir="$(dirname "$d")"
             echo "== $dir =="
-            ( cd "$dir" && python setup.py --name --version )
+            ( cd "$dir" && uv build --wheel )
           done

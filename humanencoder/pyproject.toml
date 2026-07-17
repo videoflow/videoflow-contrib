@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_humanencoder"
+version = "0.1"
+description = "TensorFlow 2 human appearance encoder (re-id features) for the Videoflow library"
+license = { text = "MIT" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "tensorflow>=2.16,<2.18",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+gpu = ["tensorflow[and-cuda]>=2.16,<2.18"]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/humanencoder"]

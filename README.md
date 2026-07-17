@@ -14,7 +14,7 @@ This contribution repository is both the proving ground for new functionality, a
 ## Independent sub-packages
 Each folder in the repository corresponds to an individual sub-package that follows the [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages) Python 3 standard.  The project follows that structure to facilitate per subpackage independent licensing and installation.
 
-See the [Tensorflow Object detection](detector_tf) sub-package for an example of how to structure ``videoflow_contrib`` sub-packages.  Each sub-package should have a ``setup.py`` file and a ``Dockerfile`` that describes the environment needed to use it.
+See the [Tensorflow Object detection](detector_tf) sub-package for an example of how to structure ``videoflow_contrib`` sub-packages.  Each sub-package is a [uv](https://docs.astral.sh/uv/) project with a ``pyproject.toml`` (hatchling build backend; its runtime dependencies are declared there, with a ``[project.optional-dependencies] gpu`` extra where a CUDA build differs) and a ``Dockerfile`` (plus a ``gpu.Dockerfile`` where relevant) that describes the environment needed to use it. Build a component's wheel with ``uv build`` from its directory.
 
 ## Component descriptors
 
@@ -33,9 +33,9 @@ Validate every descriptor against the videoflow schema before pushing:
 ```
 
 CI (`.github/workflows/components.yml`) runs this on every push, plus a check that each
-sub-package's `setup.py` is installable. When you add a component, add a `component.yaml`
-next to its `setup.py` (copy the closest existing one and adjust `pythonClass`, `params.schema`,
-and `io`).
+sub-package builds a wheel from its `pyproject.toml`. When you add a component, add a
+`component.yaml` next to its `pyproject.toml` (copy the closest existing one and adjust
+`pythonClass`, `params.schema`, and `io`).
 
 ## Example Usage
 Consumers, producers and processors from the Videoflow-contrib library are used

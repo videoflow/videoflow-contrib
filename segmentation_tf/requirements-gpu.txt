@@ -1,1 +1,0 @@
-tensorflow[and-cuda]>=2.16,<2.18

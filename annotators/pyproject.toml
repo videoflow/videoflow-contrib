@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_annotators"
+version = "0.1"
+description = "Draws detection/track boxes and labels onto frames (OpenCV) for the Videoflow library"
+license = { text = "MIT" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+# OpenCV and NumPy come from videoflow-base; only videoflow itself is a hard dep.
+dependencies = ["videoflow"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+# videoflow_contrib is a PEP 420 namespace package (no top-level __init__.py); ship
+# only this component's subpackage, preserving the full path (only-include keeps the
+# videoflow_contrib/ prefix, unlike `packages`, which would rewrite it to the basename).
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/annotators"]

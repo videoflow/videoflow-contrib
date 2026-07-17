@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_tracker_deepsort"
+version = "0.1"
+description = "Deep SORT multi-object tracker (appearance features + Kalman) for the Videoflow library"
+license = { text = "MIT" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "scipy>=1.11",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/tracker_deepsort"]

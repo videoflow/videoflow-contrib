@@ -17,14 +17,9 @@ WORKDIR /app
 # tf-keras (Keras 2) provides the graph-mode backend this node needs on TF>=2.16.
 ENV TF_USE_LEGACY_KERAS=1
 
-# Component dependencies (on top of videoflow-base's built-in node deps: OpenCV,
-# ffmpeg, NumPy, the NATS client, Redis, PyYAML).
-COPY requirements.txt ./requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt
-
 # The videoflow_contrib.yolo package (importable by its module path, which is what
-# appears in VF_NODE_CLASS). --no-deps: videoflow is already present in the base image.
+# appears in VF_NODE_CLASS). Its dependencies come from pyproject.toml; videoflow is already in the base image.
 COPY . ./
-RUN uv pip install --system --no-cache --no-deps .
+RUN uv pip install --system --no-cache .
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from the base image.

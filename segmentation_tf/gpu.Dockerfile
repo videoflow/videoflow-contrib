@@ -11,14 +11,9 @@ ARG BASE_IMAGE=videoflow-base:py3.12-cuda
 FROM ${BASE_IMAGE}
 
 WORKDIR /app
-# Component dependencies (on top of videoflow-base's built-in node deps: OpenCV,
-# ffmpeg, NumPy, the NATS client, Redis, PyYAML).
-COPY requirements-gpu.txt ./requirements.txt
-RUN uv pip install --system --break-system-packages --no-cache -r requirements.txt
-
 # The videoflow_contrib.segmentation_tf package (importable by its module path, which is what
-# appears in VF_NODE_CLASS). --no-deps: videoflow is already present in the base image.
+# appears in VF_NODE_CLASS). Its dependencies come from pyproject.toml; videoflow is already in the base image.
 COPY . ./
-RUN uv pip install --system --break-system-packages --no-cache --no-deps .
+RUN uv pip install --system --break-system-packages --no-cache '.[gpu]'
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from the base image.
