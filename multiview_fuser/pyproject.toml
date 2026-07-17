@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_multiview_fuser"
-version = "0.1"
+version = "1.0.0"
 description = "Multi-view 3D fuser (ground-plane association + DLT triangulation) for the Videoflow offside system"
 license = { text = "MIT" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow",
+    "videoflow>=1.0.0",
     "numpy>=1.24",
     "scipy>=1.11",
 ]

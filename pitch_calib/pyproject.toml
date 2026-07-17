@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_pitch_calib"
-version = "0.1"
+version = "1.0.0"
 description = "Soccer-pitch landmark detection + PnP/DLT camera calibration for Videoflow"
 license = { text = "AGPL-3.0" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow",
+    "videoflow>=1.0.0",
     "numpy>=1.24",
     "scipy>=1.11",
     "ultralytics>=8.2",

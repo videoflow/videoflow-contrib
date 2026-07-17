@@ -2,7 +2,7 @@ apiVersion: videoflow.io/v1
 kind: Component
 metadata:
   name: videoflow/offside-engine
-  version: "0.1"
+  version: "1.0.0"
   license: MIT
   description: Stateful offside decision engine. Consumes a stream of reconstructed 3D world states, detects ball touches, pairs kick to next touch, backward-associates the receiver to the kick instant, and emits Law-11 offside verdicts.
 spec:
@@ -11,7 +11,7 @@ spec:
   runtime:
     pythonClass: videoflow_contrib.offside_engine.OffsideEngine
     images:
-      cpu: ghcr.io/videoflow/contrib-offside-engine:0.1
+      cpu: ghcr.io/videoflow/contrib-offside-engine:1.0.0
   device: [cpu]
   params:
     schema:

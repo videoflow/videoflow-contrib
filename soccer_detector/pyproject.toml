@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_soccer_detector"
-version = "0.1"
+version = "1.0.0"
 description = "RF-DETR soccer detector (players/GK/referee/ball) for Videoflow"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow",
+    "videoflow>=1.0.0",
     "numpy>=1.24",
     "ultralytics>=8.2",   # 'yolo' backend — runs anywhere (torch >= 2.0)
     "rfdetr>=1.0",        # 'rfdetr' backend — higher accuracy, needs torch >= 2.4

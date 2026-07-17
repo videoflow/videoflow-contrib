@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_detectron2"
-version = "0.1"
+version = "1.0.0"
 description = "Detectron2 (PyTorch) human pose estimation for the Videoflow library"
 license = { text = "MIT" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
@@ -13,7 +13,7 @@ requires-python = ">=3.12"
 # source with CUDA ops) are installed by the Dockerfiles — they need index URLs and
 # a source build that a plain dependency spec can't express. Only videoflow is a
 # resolvable dependency here.
-dependencies = ["videoflow"]
+dependencies = ["videoflow>=1.0.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

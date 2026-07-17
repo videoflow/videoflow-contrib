@@ -2,7 +2,7 @@ apiVersion: videoflow.io/v1
 kind: Component
 metadata:
   name: videoflow/multiview-fuser
-  version: "0.1"
+  version: "1.0.0"
   license: MIT
   description: Fuses 2-5 time-synchronized per-camera feature streams into a 3D world-state stream via ground-plane association, global-id tracking, and DLT triangulation of player skeletons and the ball. Single task (event-time join).
 spec:
@@ -11,7 +11,7 @@ spec:
   runtime:
     pythonClass: videoflow_contrib.multiview_fuser.MultiviewFuser
     images:
-      cpu: ghcr.io/videoflow/contrib-multiview-fuser:0.1
+      cpu: ghcr.io/videoflow/contrib-multiview-fuser:1.0.0
   device: [cpu]
   params:
     schema:

@@ -2,7 +2,7 @@ apiVersion: videoflow.io/v1
 kind: Component
 metadata:
   name: videoflow/synced-video-reader
-  version: "0.1"
+  version: "1.0.0"
   license: MIT
   description: Videofile producer that shifts each frame's event timestamp by a per-camera offset (from audio sync), aligning independent recordings on a common time axis for the time-synchronized multi-camera join.
 spec:
@@ -11,7 +11,7 @@ spec:
   runtime:
     pythonClass: videoflow_contrib.synced_video_reader.SyncedVideoReader
     images:
-      cpu: ghcr.io/videoflow/contrib-synced-video-reader:0.1
+      cpu: ghcr.io/videoflow/contrib-synced-video-reader:1.0.0
   device: [cpu]
   params:
     schema:
