@@ -1,16 +1,11 @@
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
-
-from videoflow.core.node import ProcessorNode
 from videoflow.core.constants import CPU, GPU
 from videoflow.processors.vision.detectors import ObjectDetector
-from .tensorflow_utils import TensorflowModel, TfliteModel
 from videoflow.utils.downloader import get_file
 
-import tensorflow.compat.v1 as tf
+from .tensorflow_utils import TensorflowModel, TfliteModel
 
 BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 
@@ -26,7 +21,7 @@ class TfliteObjectDetector(ObjectDetector):
         kwargs.pop('nb_tasks', None)
         kwargs.pop('device_type', None)
         super(TfliteObjectDetector, self).__init__(nb_tasks = 1, device_type = CPU, **kwargs)
-    
+
     def open(self):
         '''
         Creates session with tensorflow model
@@ -36,11 +31,11 @@ class TfliteObjectDetector(ObjectDetector):
             ["image_tensor:0"],
             ["detection_boxes:0", "detection_scores:0", "detection_classes:0", "num_detections:0"]
         )
-    
+
     def close(self):
         pass
 
-    def _detect(self, im: np.array) -> np.array:
+    def _detect(self, im: np.ndarray) -> np.ndarray:
         h, w, _ = im.shape
         im_expanded = np.expand_dims(im, axis = 0)
         boxes, scores, classes, num = self._tflite_model.run_on_input(im_expanded)
@@ -61,30 +56,30 @@ class TensorflowObjectDetector(ObjectDetector):
 
     Initializes the tensorflow model.  If ``path_to_pb_file`` is provided, it uses a local
     model. If not, it uses ``architecture`` and ``dataset`` parameters to download tensorflow
-    pretrained models.  
-    
+    pretrained models.
+
     .. csv-table:: Models supported COCO Dataset
-        
+
         "Model","Speed (ms)","COCO mAP"
         "ssd-mobilenetv2_coco","30","21"
         "ssd-resnet50-fpn_coco","76","35"
         "fasterrcnn-resnet101_coco","106","32"
 
     .. csv-table:: Models supported Kitti Dataset
-        
+
         "Model","Speed (ms)", "Pascal mAP@0.5"
         "fasterrcnn-resnet101_kitti","79","87"
 
     .. csv-table:: Models supported Open Images V4 Dataset
-        
+
         "Model","Speed (ms)", "Open Images V4 mAP@0.5"
         "fasterrcnn-inception-resnetv2-atrous_oidv4.1","425","54"
         "ssd-mobilenetv2_oidv4","89","36"
-    
+
     .. csv-table:: Modesl supported Faces dataset
         "Model","Speed (ms)", "Open Images V4 mAP@0.5"
         "ssd-mobilenetv2_faces","89","79"
-    
+
     - Arguments:
         - num_classes (int): number of classes that the detector can recognize.
         - path_to_pb_file (str): Path where model pb file is \
@@ -135,7 +130,7 @@ class TensorflowObjectDetector(ObjectDetector):
 
         self._min_score_threshold = min_score_threshold
         super(TensorflowObjectDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
-    
+
     def open(self):
         '''
         Creates session with tensorflow model
@@ -146,7 +141,7 @@ class TensorflowObjectDetector(ObjectDetector):
             device_id = 'gpu'
         else:
             device_id = 'cpu'
-        
+
         if self._path_to_pb_file is None:
             remote_url = BASE_URL_DETECTION + self._remote_model_file_name
             self._path_to_pb_file = get_file(self._remote_model_file_name, remote_url)
@@ -157,18 +152,18 @@ class TensorflowObjectDetector(ObjectDetector):
             ["detection_boxes:0", "detection_scores:0", "detection_classes:0", "num_detections:0"],
             device_id = device_id
         )
-    
+
     def close(self):
         '''
         Closes tensorflow model session.
         '''
         self._tensorflow_model._close_session()
 
-    def _detect(self, im : np.array) -> np.array:
+    def _detect(self, im : np.ndarray) -> np.ndarray:
         '''
         - Arguments:
-            - im (np.array): (h, w, 3)
-        
+            - im (np.ndarray): (h, w, 3)
+
         - Returns:
             - dets: np.array of shape (nb_boxes, 6) \
                 Specifically (nb_boxes, [ymin, xmin, ymax, xmax, class_index, score])
@@ -177,7 +172,7 @@ class TensorflowObjectDetector(ObjectDetector):
         im_expanded = np.expand_dims(im, axis = 0)
         boxes, scores, classes, num = self._tensorflow_model.run_on_input(im_expanded)
         boxes, scores, classes = np.squeeze(boxes, axis = 0), np.squeeze(scores, axis = 0), np.squeeze(classes, axis = 0)
-        
+
         # boxes denormalization
         boxes[:,[0, 2]] = boxes[:,[0, 2]] * h
         boxes[:,[1, 3]] = boxes[:,[1, 3]] * w

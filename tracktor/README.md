@@ -7,7 +7,7 @@ It includes an updated version of Tracktor for Pytorch 1.3 with an improved obje
 ## Installing
 
 ## Evaluation Results
-This is how the pretrained models provided perform on the `MOT17` Challenge. 
+This is how the pretrained models provided perform on the `MOT17` Challenge.
 
 ```
 ********************* MOT17 TRAIN Results *********************

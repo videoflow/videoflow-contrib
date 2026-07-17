@@ -1,20 +1,19 @@
 import os.path
 
-import numpy as np
 import cv2
-from detectron2.modeling import build_model
+import numpy as np
+from videoflow.core.constants import CPU, GPU
+from videoflow.core.node import ProcessorNode
+from videoflow.utils.downloader import get_file
+
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
-
-from videoflow.core.node import ProcessorNode
-from videoflow.core.constants import GPU, CPU
-from videoflow.utils.downloader import get_file
 
 BASE_URL_DETECTRON2 = 'https://github.com/videoflow/videoflow-contrib/releases/download/detectron2/'
 
 class HumanPoseAnnotator(ProcessorNode):
     _KEYPOINT_THRESHOLD = 0.05
-    
+
     COCO_PERSON_KEYPOINT_NAMES = (
         "nose",
         "left_eye", "right_eye",
@@ -61,12 +60,12 @@ class HumanPoseAnnotator(ProcessorNode):
     def __init__(self, **kwargs):
         super(HumanPoseAnnotator, self).__init__(**kwargs)
 
-    def process(self, im: np.array, frame_keypoints: np.array):
+    def process(self, im: np.ndarray, frame_keypoints: np.ndarray):
         '''
-        - Arguments: 
+        - Arguments:
             - im: np.array of shape (h, w, 3)
             - keypoints: np.array of shape (nb_people, 17, 3)
-        
+
         - Returns:
             - im: np.array of shape (h, w, 3) annotated with keypoints on it.
         '''
@@ -80,14 +79,14 @@ class HumanPoseAnnotator(ProcessorNode):
                     im = cv2.circle(im, (x, y), 10, (0, 0, 255), thickness = -1)
                     keypoint_name = self.COCO_PERSON_KEYPOINT_NAMES[idx]
                     visible[keypoint_name] = (x, y)
-            
+
             # Draw normal connected lines
             for kp0, kp1, color in self.KEYPOINT_CONNECTION_RULES:
                 if kp0 in visible and kp1 in visible:
                     x0, y0 = visible[kp0]
                     x1, y1 = visible[kp1]
                     im = cv2.line(im, (x0, y0), (x1, y1), color, thickness = 5)
-        
+
             # Draw lines from nose to mid-shoulder and mid-shoulder to mid-hip
             # Note that this strategy is specific to person keypoints.
             try:
@@ -98,9 +97,9 @@ class HumanPoseAnnotator(ProcessorNode):
                 pass
             else:
                 nose_x, nose_y = visible.get("nose", (None, None))
-                if nose_x is not None:
+                if nose_x is not None and nose_y is not None:
                     im = cv2.line(im, (nose_x, nose_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
-            
+
                 try:
                     # draw line from mid-shoulder to mid-hip
                     lh_x, lh_y = visible["left_hip"]
@@ -110,7 +109,7 @@ class HumanPoseAnnotator(ProcessorNode):
                 else:
                     mid_hip_x, mid_hip_y = int((lh_x + rh_x) / 2), int((lh_y + rh_y) / 2)
                     im = cv2.line(im, (mid_hip_x, mid_hip_y), (mid_shoulder_x, mid_shoulder_y), color = (0, 0, 255))
-        
+
         return im
 
 class Detectron2HumanPose(ProcessorNode):
@@ -119,7 +118,7 @@ class Detectron2HumanPose(ProcessorNode):
 
     - R50_FPN_3x
     '''
-    
+
     supported_models = [
         'R50_FPN_3x'
     ]
@@ -156,14 +155,14 @@ class Detectron2HumanPose(ProcessorNode):
             self._path_to_model_config = os.path.join(current_folder, 'configs', f'{self._architecture}.yaml')
         cfg.merge_from_file(self._path_to_model_config)
         cfg.MODEL.WEIGHTS = self._path_to_model_file
-        
+
         self._predictor = DefaultPredictor(cfg)
-    
-    def process(self, im: np.array):
+
+    def process(self, im: np.ndarray):
         '''
         - Parameters:
             - im: np.array of shape (h, w, 3) in BGR order on the last dimension (opencv order)
-        
+
         - Returns:
             - pred_keypoints: np.array of shape (nb_people, 17, [x, y, prob])
             - pred_boxes: np.array of shape (nb_people, [xmin, ymin, xmax, ymax])

@@ -1,20 +1,14 @@
+
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
-
 import torch.utils.model_zoo as model_zoo
-from torchvision.models.resnet import Bottleneck
 import torchvision.models as models
-from torchvision.transforms import Resize, Compose, ToPILImage, ToTensor
+from torch.autograd import Variable
+from torchvision.models.resnet import Bottleneck
+from torchvision.transforms import Compose, Resize, ToPILImage, ToTensor
 
-import numpy as np
-import random
-import cv2
-import math
-
-from .triplet_loss import _get_anchor_positive_triplet_mask, _get_anchor_negative_triplet_mask, _get_triplet_mask
+from .triplet_loss import _get_anchor_negative_triplet_mask, _get_anchor_positive_triplet_mask, _get_triplet_mask
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -27,7 +21,7 @@ model_urls = {
 class ResNet(models.ResNet):
     def __init__(self, block, layers, output_dim):
         super(ResNet, self).__init__(block, layers)
-        
+
         self.name = "ResNet"
 
         self.avgpool = nn.AvgPool2d((8,4), stride=1)
@@ -67,7 +61,7 @@ class ResNet(models.ResNet):
         """Tests the rois on a particular image. Should be inside image."""
         x = self.build_crops(image, rois)
         x = Variable(x)
-        
+
         return self.forward(x)
 
     def compare(self, e0, e1, train=False):
@@ -119,7 +113,7 @@ class ResNet(models.ResNet):
         labels = labels.cuda()
 
         embeddings = self.forward(inp)
-        
+
         if loss == "cross_entropy":
             m = _get_triplet_mask(labels).nonzero()
             e0 = []

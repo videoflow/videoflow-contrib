@@ -24,7 +24,7 @@ to let us know.
 
 3. Make sure to provide us with useful information about
 your configuration: What OS are you using? What Tensorflow version are you using?
-Are you running on GPU? If so, what is your version of Cuda, of CuDNN? 
+Are you running on GPU? If so, what is your version of Cuda, of CuDNN?
 What is your GPU?
 
 4. Provide us with a script to reproduce the issue.  This script should
@@ -48,7 +48,7 @@ improvements and bug gixes should go to the videoflow-contrib
 
 Here is a quick guide on how to submit your improvements::
 
-1. Write the 
+1. Write the
 code.
 
 2. Make sure any new function or class you introduce has
@@ -57,20 +57,20 @@ has up-to-date docstrings and documentation.  Use
 previously written code as a reference on how to format
 them.  In particular, they should be formatted in MarkDown,
 and there should be sections for `Arguments`, `Returns` and
-`Raises` (if applicable). 
+`Raises` (if applicable).
 
 3. Write tests. Your code should have full unit test coverage.
 If you want to see your PRs merged promptly, this is crucial.
 
-4. Run our test suite locally. It is easy: from the 
+4. Run our test suite locally. It is easy: from the
 Videoflow folder, simply run ``py.test tests/``
 
 
-5. Make sure all tests are 
+5. Make sure all tests are
 passing.
 
 
-6. When committing, use appropriate, descriptive 
+6. When committing, use appropriate, descriptive
 commit messages.
 
 7. Update the documentation.  If introducing new functionality,

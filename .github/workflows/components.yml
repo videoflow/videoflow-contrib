@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install videoflow (deploy extra: brings the component CLI + jsonschema)
+      - name: Install videoflow with the deploy extra (component CLI + jsonschema)
         run: pip install "videoflow[deploy] @ git+https://github.com/videoflow/videoflow" jsonschema
       - name: Validate component descriptors
         run: ./validate-components.sh

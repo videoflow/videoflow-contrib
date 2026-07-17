@@ -1,7 +1,10 @@
 from __future__ import absolute_import
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+
 from . import kalman_filter
+
 
 def linear_assignment(cost_matrix):
     '''
@@ -141,7 +144,7 @@ def matching_cascade(
                 distance_metric, max_distance, tracks, detections,
                 track_indices_l, unmatched_detections)
         matches += matches_l
-    unmatched_tracks = list(set(track_indices) - set(k for k, _ in matches))
+    unmatched_tracks = list(set(track_indices) - {k for k, _ in matches})
     return matches, unmatched_tracks, unmatched_detections
 
 

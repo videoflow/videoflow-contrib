@@ -1,10 +1,9 @@
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 # TF1 graph/session API under TensorFlow 2 lives in tf.compat.v1; disable v2 behaviour
 # to keep the original graph-mode semantics (see the node modules for details).
 import tensorflow.compat.v1 as tf
+
 tf.disable_v2_behavior()
 
 class TfliteModel:
@@ -22,11 +21,11 @@ class TfliteModel:
         self._input_tensor_names = input_tensors_names
         self._output_tensor_names = output_tensors_names
         self._load_model()
-    
+
     def _load_model(self):
         self._interpreter = tf.lite.Interpreter(model_path = self._model_file_path)
         self._interpreter.allocate_tensors()
-        
+
         #1. Inputs
         input_details = self._interpreter.get_input_details()
         name_to_index_d = {a['name'] : a['index'] for a in input_details}
@@ -36,21 +35,21 @@ class TfliteModel:
         output_details = self._interpreter.get_output_details()
         name_to_index_d.update({a['name'] : a['index'] for a in output_details})
         self._output_indexes = [name_to_index_d[a] for a in self._output_tensor_names]
-    
+
     def get_input_details(self):
         '''
-        Returns metadata that describes the shape and type of the inputs that 
+        Returns metadata that describes the shape and type of the inputs that
         the model accepts
         '''
         return self._interpreter.get_input_details()
-    
+
     def get_output_details(self):
         '''
-        Returns metadata that describes the shape and type of the outputs 
+        Returns metadata that describes the shape and type of the outputs
         that the model produces
         '''
         return self._interpreter.get_output_details()
-    
+
     def run_on_input(self, *inp_l):
         '''
         - Arguments:
@@ -87,7 +86,7 @@ class TensorflowModel:
         self._output_tensors = None
         self._input_tensors = None
         self._load_model()
-    
+
     def _load_model(self):
         '''
         Loads model from file and creates the model session to make it ready
@@ -101,7 +100,7 @@ class TensorflowModel:
                     serialized_graph = fid.read()
                     graph_def.ParseFromString(serialized_graph)
                     tf.import_graph_def(graph_def, name = '')
-        
+
         self._session = tf.Session(graph = self._model_graph)
         self._output_tensors = [self._model_graph.get_tensor_by_name(name) for name in self._output_tensors_names]
         self._input_tensors = [self._model_graph.get_tensor_by_name(name) for name in self._input_tensors_names]
@@ -112,7 +111,7 @@ class TensorflowModel:
         '''
         if self._session:
             self._session.close()
-    
+
     def run_on_input(self, *inp_l):
         '''
         - Arguments:

@@ -1,27 +1,21 @@
 from collections import deque
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.autograd import Variable
 from scipy.optimize import linear_sum_assignment
 from torchvision.ops.boxes import clip_boxes_to_image, nms
 
-from .utils import (
-    bbox_overlaps,
-    warp_pos,
-    get_center,
-    get_height,
-    get_width,
-    make_pos
-)
+from .utils import bbox_overlaps, get_center, get_height, get_width, make_pos
+
 
 class Tracker:
     '''
     The main tracking file. Here is where the magic happens
-    ''' 
-    def __init__(self, 
-                obj_detect, 
-                reid_network, 
+    '''
+    def __init__(self,
+                obj_detect,
+                reid_network,
                 detection_person_thresh,
                 regression_person_thresh,
                 detection_nms_thresh,
@@ -62,7 +56,7 @@ class Tracker:
         self.track_num = 0
         self.im_index = 0
         self.results = {}
-    
+
     def reset(self, hard = True):
         self.tracks = []
         self.inactive_tracks = []
@@ -71,13 +65,13 @@ class Tracker:
             self.track_num = 0
             self.results = {}
             self.im_index = 0
-    
+
     def tracks_to_inactive(self, tracks):
         self.tracks = [t for t in self.tracks if t not in tracks]
         for t in tracks:
             t.pos = t.last_pos[-1]
             self.inactive_tracks += tracks
-    
+
     def add(self, new_det_pos, new_det_scores, new_det_features):
         '''
         Initializes new Track objects and saves them
@@ -95,7 +89,7 @@ class Tracker:
                 )
             )
         self.track_num += num_new
-    
+
     def regress_tracks(self, blob):
         '''
         Regresses the position of the tracks and also checks their scores
@@ -113,9 +107,9 @@ class Tracker:
             else:
                 s.append(scores[i])
                 t.pos = pos[i].view(1, -1)
-        
+
         return torch.Tensor(s[::-1]).cuda()
-    
+
     def get_pos(self):
         '''
         Gets the positions of all the active tracks
@@ -127,7 +121,7 @@ class Tracker:
         else:
             pos = torch.zeros(0).cuda()
         return pos
-    
+
     def get_features(self):
         '''
         Get the features of all active tracks
@@ -139,7 +133,7 @@ class Tracker:
         else:
             features = torch.zeros(0).cuda()
         return features
-    
+
     def get_inactive_features(self):
         '''
         Get the features of all inactive tracks
@@ -151,7 +145,7 @@ class Tracker:
         else:
             features = torch.zeros(0).cuda()
         return features
-    
+
     def reid(self, blob, new_det_pos, new_det_scores):
         '''
         Tries to ReID inactive tracks with provided detections
@@ -196,10 +190,10 @@ class Tracker:
                         t.add_features(new_det_features[c].view(1, -1))
                         assigned.append(c)
                         remove_inactive.append(t)
-                
+
                 for t in remove_inactive:
                     self.inactive_tracks.remove(t)
-                
+
                 keep = torch.Tensor([i for i in range(new_det_pos.size(0)) if i not in assigned]).long().cuda()
                 if keep.nelement() > 0:
                     new_det_pos = new_det_pos[keep]
@@ -209,10 +203,10 @@ class Tracker:
                     new_det_pos = torch.zeros(0).cuda()
                     new_det_scores = torch.zeros(0).cuda()
                     new_det_features = torch.zeros(0).cuda()
-                
+
         return new_det_pos, new_det_scores, new_det_features
 
-    
+
     def get_appearances(self, blob):
         '''
         Uses the siamese CNN to get features for all active tracks
@@ -226,7 +220,7 @@ class Tracker:
         '''
         for t, f in zip(self.tracks, new_features):
             t.add_features(f.view(1, -1))
-    
+
     def align(self, blob):
         '''
         Aligns the positions of active and inactive tracks depending on camera motion
@@ -243,7 +237,7 @@ class Tracker:
             track.pos = make_pos(*center_new, get_width(track.pos), get_height(track.pos))
         else:
             track.pos = track.pos + track.last_v
-    
+
     def motion(self):
         '''
         Applies a simple linear motion model that considers the last n_steps steps
@@ -260,12 +254,12 @@ class Tracker:
                 vs = [p2 - p1 for p1, p2 in zip(last_pos, last_pos[1:])]
             t.last_v = torch.stack(vs).mean(dim = 0)
             self.motion_step(t)
-        
+
         if self.do_reid:
             for t in self.inactive_tracks:
                 if t.tas_v.nelement() > 0:
                     self.motion_step(t)
-    
+
     def step(self, blob):
         '''
         This function should be called at every timestep to perform tracking
@@ -274,7 +268,7 @@ class Tracker:
         for t in self.tracks:
             # add current position to last_pos list
             t.last_pos.append(t.pos.clone())
-        
+
         # 1. Look for new detections
         if self.public_detections:
             boxes, scores = blob['boxes'], blob['scores']
@@ -285,23 +279,21 @@ class Tracker:
                 scores = scores.cuda()
         else:
             boxes, scores = self.obj_detect.detect(blob['img'])
-        
+
         if boxes.nelement() > 0:
             boxes = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
             inds = torch.gt(scores, self.detection_person_thresh).nonzero().view(-1)
         else:
             inds = torch.zeros(0).cuda()
-        
+
         if inds.nelement() > 0:
             det_pos = boxes[inds]
             det_scores = scores[inds]
         else:
             det_pos = torch.zeros(0).cuda()
             det_scores = torch.zeros(0).cuda()
-        
+
         # 2. Predict tracks
-        num_tracks = 0
-        nms_inp_reg = torch.zeros(0).cuda()
         if len(self.tracks):
             # 2.1 Align
             if self.do_align:
@@ -311,7 +303,7 @@ class Tracker:
             if self.motion_model_cfg['enabled']:
                 self.motion()
                 self.tracks = [t for t in self.tracks if t.has_positive_area()]
-            
+
             # 2.3 Regress
             person_scores = self.regress_tracks(blob)
             if len(self.tracks):
@@ -322,7 +314,7 @@ class Tracker:
                     if self.do_reid:
                         new_features = self.get_appearances(blob)
                         self.add_features(new_features)
-        
+
         # 3. Create new tracks
         # !!! Here NMS is used to filter out detections that are already covered by tracks. This is
 		# !!! done by iterating through the active tracks one by one, assigning them a bigger score
@@ -346,7 +338,7 @@ class Tracker:
                 det_scores = det_scores[keep]
                 if keep.nelement() == 0:
                     break
-        
+
         if det_pos.nelement() > 0:
             new_det_pos = det_pos
             new_det_scores = det_scores
@@ -356,24 +348,24 @@ class Tracker:
 
             if new_det_pos.nelement() > 0:
                 self.add(new_det_pos, new_det_scores, new_det_features)
-            
-        
+
+
         # 4. Generate results
         for t in self.tracks:
             if t.id not in self.results.keys():
                 self.results[t.id] = {}
             self.results[t.id][self.im_index] = np.concatenate([t.pos[0].clone().cpu().numpy(), np.array([t.score.clone().cpu().numpy().item()])])
-        
+
         for t in self.inactive_tracks:
             t.count_inactive += 1
-        
+
         self.inactive_tracks = [
             t for t in self.inactive_tracks if t.has_positive_area() and t.count_inactive <= self.inactive_patience
         ]
 
         self.im_index += 1
         self.last_image = blob['img'][0]
-    
+
     def get_current_tracks(self):
         '''
         - Returns:
@@ -389,7 +381,7 @@ class Tracker:
 
     def get_results(self):
         return self.results
-    
+
 
 class Track(object):
     '''
@@ -407,10 +399,10 @@ class Track(object):
         self.last_pos = deque([pos.clone()], maxlen = mm_steps + 1)
         self.last_v = torch.Tensor([])
         self.gt_id = None
-    
+
     def has_positive_area(self):
         return self.pos[0, 2] > self.pos[0, 0] and self.pos[0, 3] > self.pos[0, 1]
-    
+
     def add_features(self, features):
         '''
         Adds new appearance features to the object
@@ -418,7 +410,7 @@ class Track(object):
         self.features.append(features)
         if len(self.features) > self.max_features_num:
             self.features.popleft()
-    
+
     def test_features(self, test_features):
         '''
         Compares test_features to features of this Track object
@@ -427,14 +419,11 @@ class Track(object):
             features = torch.cat(list(self.features), dim = 0)
         else:
             features = self.features[0]
-        
+
         features = features.mean(0, keepdim = True)
         dist = F.pairwise_distance(features, test_features, keepdim = True)
         return dist
-    
+
     def reset_last_pos(self):
         self.last_pos.clear()
         self.last_pos.append(self.pos.clone())
-
-
-

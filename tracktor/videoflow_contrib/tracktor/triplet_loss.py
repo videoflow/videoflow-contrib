@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 
+
 def _pairwise_distances(embeddings, squared=False):
     """Compute the 2D matrix of distances between all the embeddings.
     Args:

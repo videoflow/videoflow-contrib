@@ -1,8 +1,7 @@
-from typing import Optional, Mapping
+from typing import Mapping, Optional
 
 import cv2
 import numpy as np
-
 from videoflow.core import ProcessorNode
 
 
@@ -33,19 +32,19 @@ class ObjectAnnotator(ProcessorNode):
         super().__init__(nb_tasks=nb_tasks, **kwargs)
 
     def _annotate(self,
-                  im: np.array,
-                  boxes: np.array,
-                  class_ids: Optional[np.array] = None,
-                  confidence: Optional[np.array] = None,
-                  ids: Optional[np.array] = None,
-                  ) -> np.array:
+                  im: np.ndarray,
+                  boxes: np.ndarray,
+                  class_ids: Optional[np.ndarray] = None,
+                  confidence: Optional[np.ndarray] = None,
+                  ids: Optional[np.ndarray] = None,
+                  ) -> np.ndarray:
         """Annotates image. See `process` for arguments and return value docs."""
 
         for i in range(len(boxes)):
             bbox = boxes[i]
             ymin, xmin, ymax, xmax = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
             y_label = ymin - 15 if ymin - 15 > 15 else min(ymin + 15, ymax)
-            class_label = self._class_labels.get(class_ids[i])
+            class_label = self._class_labels.get(class_ids[i]) if class_ids is not None else None
             if class_label is None:
                 class_label = ''
             if confidence is not None:
@@ -65,15 +64,15 @@ class ObjectAnnotator(ProcessorNode):
         return im
 
     def process(self,
-                im: np.array,
-                boxes: np.array,
-                class_ids: Optional[np.array] = None,
-                confidence: Optional[np.array] = None,
-                ids: Optional[np.array] = None,
-                ) -> np.array:
+                im: np.ndarray,
+                boxes: np.ndarray,
+                class_ids: Optional[np.ndarray] = None,
+                confidence: Optional[np.ndarray] = None,
+                ids: Optional[np.ndarray] = None,
+                ) -> np.ndarray:
         """
         - Arguments:
-            - im: np.array
+            - im: np.ndarray
             - boxes: np.array of shape (batch, 4) \
                 second dimension entries are [ymin, xmin, ymax, xmax]
             - class_ids: np.array of shape (batch, ) or None

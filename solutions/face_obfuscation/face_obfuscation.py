@@ -12,14 +12,14 @@ Deploy to Kubernetes:
 '''
 import os
 
-import numpy as np
 import cv2
-
+import numpy as np
 import videoflow
+from videoflow.consumers import VideofileWriter
 from videoflow.core import Flow
 from videoflow.core.constants import BATCH
-from videoflow.consumers import VideofileWriter
 from videoflow.producers import VideofileReader
+
 
 class FrameIndexSplitter(videoflow.core.node.ProcessorNode):
     def __init__(self, **kwargs):
@@ -33,7 +33,7 @@ class BoundingboxObfuscator(videoflow.core.node.ProcessorNode):
     def __init__(self, nb_tasks = 1, **kwargs):
         super(BoundingboxObfuscator, self).__init__(nb_tasks = nb_tasks, **kwargs)
 
-    def process(self, im: np.array, bounding_boxes: np.array, tracker_bounding_boxes: np.array):
+    def process(self, im: np.ndarray, bounding_boxes: np.ndarray, tracker_bounding_boxes: np.ndarray):
         '''
         - Arguments:
             - im: np.array of shape (h, w, 3)

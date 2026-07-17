@@ -1,16 +1,12 @@
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import torch
-import numpy as np
-from torchvision.transforms import ToTensor
 from videoflow.core.node import OneTaskProcessorNode
 from videoflow.utils.downloader import get_file
 
-from .tracker import Tracker
 from .frcnn_fpn import FRCNN_FPN
 from .reid import resnet50
+from .tracker import Tracker
 
 URL_DETECTION_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/detection.pth'
 URL_REID_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/reid.pth'
@@ -28,19 +24,19 @@ class TracktorFromFrames(OneTaskProcessorNode):
         # get_params() so reconstruction doesn't pass it twice.
         kwargs.pop('device_type', None)
         super(TracktorFromFrames, self).__init__(device_type = 'gpu', **kwargs)
-    
+
     def _transform(self, pic):
         if pic.ndim == 2:
             pic = pic[:, :, None]
 
         img = torch.from_numpy(pic.transpose((2, 0, 1)).copy())
-        
+
         # backward compatibility
         if isinstance(img, torch.ByteTensor):
             return img.float().div(255)
         else:
             return img
-        
+
     def open(self):
         #1. Load detection model
         detection_model_path = get_file('detection.pkl', URL_DETECTION_MODEL)
@@ -62,8 +58,8 @@ class TracktorFromFrames(OneTaskProcessorNode):
 
         #3. Creater tracker
         self._tracker = Tracker(
-            obj_detect, 
-            reid_network, 
+            obj_detect,
+            reid_network,
             detection_person_thresh = 0.5,
             regression_person_thresh = 0.5,
             detection_nms_thresh = 0.3,
@@ -88,10 +84,10 @@ class TracktorFromFrames(OneTaskProcessorNode):
     def process(self, frame):
         '''
         - Arguments:
-            - frame (np.array) (h, w, 3)
-        
+            - frame (np.ndarray) (h, w, 3)
+
         - Returns:
-            - tracks: (np.array) (nb_boxes, 6) \
+            - tracks: (np.ndarray) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
 
@@ -100,7 +96,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
         self._tracker.step({'img': t_frame})
         results = self._tracker.get_current_tracks()
         return results
-    
+
 
 class TracktorFromBoxes(OneTaskProcessorNode):
     def __init__(self, interpolate = False, **kwargs):
@@ -110,11 +106,11 @@ class TracktorFromBoxes(OneTaskProcessorNode):
         # get_params() so reconstruction doesn't pass it twice.
         kwargs.pop('device_type', None)
         super(TracktorFromBoxes, self).__init__(device_type = 'gpu', **kwargs)
-    
+
     def _transform_image(self, pic):
         if pic.ndim == 2:
             pic = pic[:, :, None]
-        
+
         img = torch.from_numpy(pic.transpose((2, 0, 1)).copy())
 
         # Backward compatibility
@@ -126,9 +122,9 @@ class TracktorFromBoxes(OneTaskProcessorNode):
     def _transform_bboxes(self, bounding_boxes):
         '''
         - Arguments:
-            - bounding_boxes: (np.array) (nb_boxes, 5), specifically:
+            - bounding_boxes: (np.ndarray) (nb_boxes, 5), specifically:
                 (nb_boxes, [xmin, ymin, xmax, ymax, score])
-        
+
         - Returns:
             - bboxes: (torch.Tensor) (nb_boxes, 4)
             - scores: (torch.Tensor) (nb_boxes,)
@@ -136,7 +132,7 @@ class TracktorFromBoxes(OneTaskProcessorNode):
         bboxes = torch.from_numpy(bounding_boxes[:, [0, 1, 2, 3]].astype('float32').copy())
         scores = torch.from_numpy(bounding_boxes[:, 4].astype('float32').copy())
         return bboxes, scores
-    
+
     def open(self):
         #1. Load detection model
         detection_model_path = get_file('detection.pkl', URL_DETECTION_MODEL)
@@ -183,13 +179,13 @@ class TracktorFromBoxes(OneTaskProcessorNode):
 
     def process(self, frame, bounding_boxes):
         '''
-        - Arguments: 
-            - frame: (np.array) (h, w, 3)
-            - bboxes: (np.array) (nb_boxes, 5), specifically:
+        - Arguments:
+            - frame: (np.ndarray) (h, w, 3)
+            - bboxes: (np.ndarray) (nb_boxes, 5), specifically:
                 (nb_boxes, [xmin, ymin, xmax, ymax, score])
-        
+
         - Returns:
-            - tracks: (np.array) (nb_boxes, 6) \
+            - tracks: (np.ndarray) (nb_boxes, 6) \
                 Specifically (nb_boxes, [xmin, ymin, xmax, ymax, score, track_id])
         '''
         t_frame = self._transform_image(frame)

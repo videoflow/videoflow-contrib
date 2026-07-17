@@ -1,11 +1,8 @@
-import os
-from collections import defaultdict
-from os import path as osp
 
 import numpy as np
 import torch
-
 from scipy.interpolate import interp1d
+
 
 def bbox_overlaps(boxes, query_boxes):
     """
@@ -99,7 +96,7 @@ def clip_boxes(boxes, im_shape):
     boxes must be tensor or Variable, im_shape can be anything but Variable
     """
     if not hasattr(boxes, 'data'):
-        boxes_ = boxes.numpy()
+        _boxes = boxes.numpy()
 
     boxes = boxes.view(boxes.size(0), -1, 4)
     boxes = torch.stack([

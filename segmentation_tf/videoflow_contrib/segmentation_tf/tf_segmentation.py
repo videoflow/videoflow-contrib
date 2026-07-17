@@ -1,19 +1,14 @@
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
-
-from videoflow.core.node import ProcessorNode
-from videoflow.core.constants import CPU, GPU
-from videoflow.processors.vision.segmentation import Segmenter
-from .tensorflow_utils import TensorflowModel
-from videoflow.utils.downloader import get_file
 
 # TF1 graph ops (tf.image.crop_and_resize with box_ind, tf.Session, tf.gfile, ...)
 # live under tf.compat.v1 in TensorFlow 2; tensorflow_utils already calls
 # disable_v2_behavior() on import to keep graph-mode semantics.
 import tensorflow.compat.v1 as tf
+from videoflow.core.constants import CPU, GPU
+from videoflow.processors.vision.segmentation import Segmenter
+from videoflow.utils.downloader import get_file
 
 BASE_URL_SEGMENTATION = 'https://github.com/videoflow/videoflow-contrib/releases/download/segmentation_tf/'
 
@@ -28,7 +23,7 @@ def reframe_box_masks_to_image_masks(box_masks, boxes, h, w):
             are normalized
         - h: Image height. The output masks will have height h.
         - w: Image width. The output masks will have widht w.
-    
+
     - Returns:
         - image_masks: tf.float32 tnesor of size [nb_masks, h, w]
     '''
@@ -42,7 +37,7 @@ def reframe_box_masks_to_image_masks(box_masks, boxes, h, w):
             max_corner = tf.expand_dims(reference_boxes[:, 2:4], 1)
             transformed_boxes = (boxes - min_corner) / (max_corner - min_corner)
             return tf.reshape(transformed_boxes, [-1, 4])
-        
+
         box_masks_expanded = tf.expand_dims(box_masks, axis = 3)
         num_boxes = tf.shape(box_masks_expanded)[0]
         unit_boxes = tf.concat(
@@ -60,7 +55,7 @@ def reframe_box_masks_to_image_masks(box_masks, boxes, h, w):
             crop_size = [h, w],
             extrapolation_value = 0.0
         )
-    
+
     image_masks = tf.cond(
         tf.shape(box_masks)[0] > 0,
         reframe_box_masks_to_image_masks_default,
@@ -75,7 +70,7 @@ class TensorflowSegmenter(Segmenter):
 
     Initializes the tensorflow model.  If ``path_to_pb_file`` is provided, it uses a local
     model. If not, it uses ``architecture`` and ``dataset`` parameters to download tensorflow
-    pretrained models.  
+    pretrained models.
 
     .. csv-table:: Models supported COCO dataset
 
@@ -128,7 +123,7 @@ class TensorflowSegmenter(Segmenter):
 
         self._min_score_threshold = min_score_threshold
         super(TensorflowSegmenter, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
-    
+
     def open(self):
         '''
         Creates session with tensorflow model
@@ -139,11 +134,11 @@ class TensorflowSegmenter(Segmenter):
             device_id = 'gpu'
         else:
             device_id = 'cpu'
-        
+
         if self._path_to_pb_file is None:
             remote_url = BASE_URL_SEGMENTATION + self._remote_model_file_name
             self._path_to_pb_file = get_file(self._remote_model_file_name, remote_url)
-        
+
         with tf.device(device_id):
             self._model_graph = tf.Graph()
             with self._model_graph.as_default():
@@ -159,7 +154,7 @@ class TensorflowSegmenter(Segmenter):
         self._detection_scores = self._model_graph.get_tensor_by_name('detection_scores:0')
         self._detection_classes = self._model_graph.get_tensor_by_name('detection_classes:0')
         self._image_tensor = self._model_graph.get_tensor_by_name('image_tensor:0')
-    
+
     def close(self):
         '''
         Closes tensorflow model session.
@@ -167,11 +162,11 @@ class TensorflowSegmenter(Segmenter):
         if self._session:
             self._session.close()
 
-    def _segment(self, im : np.array) -> np.array:
+    def _segment(self, im : np.ndarray) -> tuple:
         '''
         - Arguments:
-            - im (np.array): (h, w, 3)
-        
+            - im (np.ndarray): (h, w, 3)
+
         - Returns:
             - masks: np.array of shape (nb_masks, h, w)
             - classes: np.array of shape (nb_masks,)

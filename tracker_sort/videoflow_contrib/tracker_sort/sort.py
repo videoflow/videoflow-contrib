@@ -1,12 +1,12 @@
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
-from videoflow.processors.vision.trackers import BoundingBoxTracker
+import math
+
 import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.optimize import linear_sum_assignment
-import math
+from videoflow.processors.vision.trackers import BoundingBoxTracker
+
 
 def linear_assignment(cost_matrix):
     '''
@@ -86,13 +86,11 @@ def associate_detections_to_trackers(detections, trackers, metric_function, iou_
       Returns 3 lists of matches, unmatched_detections and unmatched_trackers
       - Returns:
         - matches: np.array of shape (n, 2)
-        - unmatched_detections: np.array of shape (nb_of_unmatches, ) that contains the 
+        - unmatched_detections: np.array of shape (nb_of_unmatches, ) that contains the
             indices of the detections that were not matched
         - unmatched_trackers: np.array of shape (nb_of_nonmatched_tracks, ) that contains the
             indices of the unmatched tracks
     """
-    distance_threshold = 500
-
     if len(trackers) == 0:
         return np.empty((0, 2), dtype = int), np.arange(len(detections)), np.empty((0, 5), dtype = int)
     iou_matrix = np.zeros((len(detections), len(trackers)), dtype=np.float32)
@@ -101,13 +99,13 @@ def associate_detections_to_trackers(detections, trackers, metric_function, iou_
         for t, trk in enumerate(trackers):
             iou_matrix[d, t] = metric_function(det, trk)
     matched_indices = linear_assignment(-iou_matrix)
-    
+
     unmatched_detections = []
-    for d,det in enumerate(detections):
+    for d, _ in enumerate(detections):
         if(d not in matched_indices[:,0]):
             unmatched_detections.append(d)
     unmatched_trackers = []
-    for t, trk in enumerate(trackers):
+    for t, _ in enumerate(trackers):
         if(t not in matched_indices[:,1]):
             unmatched_trackers.append(t)
 
@@ -178,7 +176,7 @@ class KalmanBoxTracker(object):
             self.hit_streak = 0
         self.time_since_update += 1
         self.history.append(convert_x_to_bbox(self.kf.x))
-        
+
         return self.history[-1]
 
     def get_state(self):
@@ -195,16 +193,16 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
             the internal tracklet is considered dead and is removed.
         - min_hits: A tracklet is considered a valid track if it has a hit streak larger \
             than or equal to ``min_hits``
-        - metric_function_type : str, one of ``iou`` or ``euclidean`` 
+        - metric_function_type : str, one of ``iou`` or ``euclidean``
         - metric_function_threshold: for ``iou`` the default is 0.3. For ``euclidean`` it is 100.
         - show_in_between: If set to True, it will return tracks of bounding boxes even if they were
-            not detected by the detector.  If set to False, it will return only the tracks for the 
+            not detected by the detector.  If set to False, it will return only the tracks for the
             bounding boxes detected in this frame by the detector. Note that when set to False, it
             will return the same number of entries and in the same order as they were passed to it.
         - return_original_dets: Returns the same number of tracks as original dets, with indexes matching
             If for some reason an original det does not have a corresponding track, the track index is -1
     '''
-    
+
     def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', metric_function_threshold = None, show_in_between = True, return_original_dets = False, **kwargs):
         self.max_age = max_age
         self.min_hits = min_hits
@@ -233,13 +231,13 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
 
         - Arguments:
             - dets: a numpy array of detections in the format [[ymin,xmin,ymax,xmax,score],[ymin,xmin,ymax,xmax,score],...]
-                
+
         - Returns:
             - A similar array, where the last column is the object or track id.  The number of objects returned may differ from the number of detections provided.
         """
         if fid is None:
             fid = self.previous_fid + 1
-        
+
         self.frame_count += 1
         #get predicted locations from existing trackers.
         trks = np.zeros((len(self.trackers), 5))
@@ -292,15 +290,15 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
                 else:
                     if((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
                         ret.append(np.concatenate((d,[trk.id + 1])).reshape(1, -1)) # +1 as MOT benchmark requires positive
-        
+
         # Remove dead tracklets
         for trk in reversed(self.trackers):
             i -= 1
             if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
-        
+
         if(len(ret) > 0):
             return np.concatenate(ret)
-        
+
         self.previous_fid = fid
         return np.empty((0, 5))

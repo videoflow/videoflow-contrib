@@ -1,6 +1,4 @@
-from __future__ import division
-from __future__ import print_function
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from videoflow.core.node import OneTaskProcessorNode
@@ -8,6 +6,7 @@ from videoflow.core.node import OneTaskProcessorNode
 from .detection import Detection
 from .nn_matching import NearestNeighborDistanceMetric
 from .tracker import Tracker
+
 
 class DeepSort(OneTaskProcessorNode):
     '''
@@ -33,15 +32,15 @@ class DeepSort(OneTaskProcessorNode):
         )
         self._tracker = Tracker(metric)
         super(DeepSort, self).__init__(**kwargs)
-    
+
     def process(self, bboxes):
         '''
         - Arguments:
-            - bboxes (np.array) (nb_boxes, 133). \
+            - bboxes (np.ndarray) (nb_boxes, 133). \
                 The 133 is splitted as follows: [top, left, width, height, confidence, features...]
-        
+
         - Returns:
-            - tracks: (np.array) (nb_boxes, 5) \
+            - tracks: (np.ndarray) (nb_boxes, 5) \
                 Specifically (nb_boxes, [top, left, width, height, track_id])
         '''
         detection_list = []
@@ -50,16 +49,16 @@ class DeepSort(OneTaskProcessorNode):
         for idx, bbox_data in enumerate(bboxes):
             bbox, confidence, feature = bbox_data[0:4], bbox_data[4], bbox_data[5:]
             if bbox[3] < self._min_height:
-                continue            
+                continue
             detection_list.append(Detection(bbox, confidence, feature))
             dets_idx += 1
             dets_to_bboxes_d[dets_idx] = idx
-    
+
         to_return = np.concatenate([bboxes[:,0:4], np.full((bboxes.shape[0], 1), -1)], axis = 1)
         self._tracker.predict()
         matches, _, unmatched_dets = self._tracker.update(detection_list)
         tracks_to_dets_d = dict(matches)
-        
+
         for idx, track in enumerate(self._tracker.tracks):
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
@@ -68,5 +67,5 @@ class DeepSort(OneTaskProcessorNode):
             box_idx = dets_to_bboxes_d.get(tracks_to_dets_d.get(idx, None), None)
             if box_idx is not None:
                 to_return[box_idx] = new_box
-        
+
         return np.array(to_return, np.int32)

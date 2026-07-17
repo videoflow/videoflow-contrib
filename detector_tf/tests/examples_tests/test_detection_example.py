@@ -1,14 +1,12 @@
 import pytest
-
-import numpy as np
 import videoflow
+from videoflow.consumers import VideofileWriter
 from videoflow.core import Flow
 from videoflow.core.constants import BATCH
-from videoflow.consumers import VideofileWriter
-from videoflow.producers import VideofileReader
-from videoflow_contrib.detector_tf import TensorflowObjectDetector
 from videoflow.processors.vision.annotators import BoundingBoxAnnotator
+from videoflow.producers import VideofileReader
 from videoflow.utils.downloader import get_file
+from videoflow_contrib.detector_tf import TensorflowObjectDetector
 
 BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow/releases/download/examples/"
 VIDEO_NAME = 'intersection.mp4'

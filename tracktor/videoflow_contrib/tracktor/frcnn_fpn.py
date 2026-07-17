@@ -2,7 +2,6 @@ import collections
 
 import torch
 import torch.nn.functional as F
-
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 

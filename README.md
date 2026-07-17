@@ -3,8 +3,8 @@
 [![Build Status](https://travis-ci.org/videoflow/videoflow-contrib.svg?branch=master)](https://travis-ci.org/videoflow/videoflow-contrib)
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg?maxAge=2592000)](https://github.com/videoflow/videoflow-contrib/blob/master/LICENSE)
 
-This library is the official extension repository for the Videoflow library. 
-It contains additional consumers, producers, processors, subflows, etc. which are not yet available within Videoflow itself. 
+This library is the official extension repository for the Videoflow library.
+It contains additional consumers, producers, processors, subflows, etc. which are not yet available within Videoflow itself.
 All of these additional modules can be used in conjunction with core Videoflow flows.
 This is done in the interest of keeping Videoflow succinct, clean, and simple, with as minimal dependencies to third-party
 libraries as necessaries.
@@ -91,5 +91,3 @@ if __name__ == "__main__":
 # Deploy to Kubernetes (one workload per node) with the videoflow CLI:
 #   videoflow deploy my_flow.py:build_flow --nats nats://nats:4222 --image <your-image>
 ```
-
-

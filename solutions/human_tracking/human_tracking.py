@@ -11,16 +11,13 @@ Deploy to Kubernetes:
     videoflow deploy human_tracking.py:build_flow --nats nats://nats:4222 --image <your-image>
 '''
 import numpy as np
-import cv2
-
 import videoflow
+from videoflow.consumers import VideofileWriter
 from videoflow.core import Flow
 from videoflow.core.constants import BATCH
-from videoflow.consumers import VideofileWriter
-from videoflow.producers import VideofileReader
 from videoflow.processors.vision.annotators import TrackerAnnotator
+from videoflow.producers import VideofileReader
 from videoflow.utils.downloader import get_file
-
 
 BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/"
 VIDEO_NAME = "people_walking.mp4"
@@ -54,7 +51,7 @@ class BoundingBoxesExtractor(videoflow.core.node.ProcessorNode):
         keypoints, bounding_boxes = data
         scores = np.ones((bounding_boxes.shape[0], 1))
         bounding_boxes = np.concatenate(
-            [bounding_boxes[:, [1, 0]], 
+            [bounding_boxes[:, [1, 0]],
             np.expand_dims(bounding_boxes[:,2] - bounding_boxes[:,0], 1),
             np.expand_dims(bounding_boxes[:,3] - bounding_boxes[:,1], 1)], axis = 1)
         bounding_boxes = np.concatenate([bounding_boxes, scores], axis = 1)
@@ -84,7 +81,7 @@ class CropBoundingBoxes(videoflow.core.node.ProcessorNode):
 class AppendFeaturesToBoundingBoxes(videoflow.core.node.ProcessorNode):
     def __init__(self, **kwargs):
         super(AppendFeaturesToBoundingBoxes, self).__init__(**kwargs)
-    
+
     def process(self, bboxes, features):
         '''
         - Arguments:
@@ -97,12 +94,12 @@ class AppendFeaturesToBoundingBoxes(videoflow.core.node.ProcessorNode):
 class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
     def __init__(self, **kwargs):
         super(ConvertTracksForAnotation, self).__init__(**kwargs)
-    
+
     def process(self, tracks):
         '''
         - Arguments:
             - tracks: (nb_tracks, [ymin, xmin, width, height, track_id])
-        
+
         - Returns:
             - tracks: (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
         '''
@@ -123,8 +120,8 @@ class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
 
 def build_flow():
     from videoflow_contrib.detectron2 import Detectron2HumanPose, HumanPoseAnnotator
-    from videoflow_contrib.tracker_deepsort import DeepSort
     from videoflow_contrib.humanencoder import HumanEncoder
+    from videoflow_contrib.tracker_deepsort import DeepSort
     input_file_path = get_file(VIDEO_NAME, URL_VIDEO)
     output_file = 'annotated_video.avi'
     reader = VideofileReader(input_file_path, name = 'reader')

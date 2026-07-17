@@ -4,10 +4,10 @@ can be downloaded
 '''
 
 import pytest
-
 from videoflow.utils.downloader import get_file
-from videoflow_contrib.detector_tf import TensorflowObjectDetector, BASE_URL_DETECTION
-from videoflow_contrib.segmentation_tf import TensorflowSegmenter, BASE_URL_SEGMENTATION
+from videoflow_contrib.detector_tf import BASE_URL_DETECTION, TensorflowObjectDetector
+from videoflow_contrib.segmentation_tf import BASE_URL_SEGMENTATION, TensorflowSegmenter
+
 
 def test_detector_resources():
     for modelid in TensorflowObjectDetector.supported_models:

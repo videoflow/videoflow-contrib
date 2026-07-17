@@ -7,28 +7,27 @@ Run a YOLO_v3 style detection model on test images.
 import colorsys
 import os
 import random
-from timeit import time
-from timeit import default_timer as timer  ### to calculate FPS
 
-from PIL import Image
 import numpy as np
+
 # This node uses the Keras 2 graph-mode backend (K.get_session()/K.placeholder()/
 # K.learning_phase()). On TensorFlow >= 2.16 the bundled Keras is Keras 3, which drops
 # that API, so we use the legacy Keras 2 package ``tf-keras`` (install it and set
 # TF_USE_LEGACY_KERAS=1 — see the Dockerfile). tf.compat.v1 + disable_v2_behavior keeps
 # graph-mode session semantics. Runs on TF2 / Python 3.12.
 import tensorflow.compat.v1 as tf
+from PIL import Image
+
 tf.disable_v2_behavior()
 from tf_keras import backend as K
 from tf_keras.models import load_model
-from PIL import Image, ImageFont, ImageDraw
-
-from videoflow.utils.downloader import get_file
 from videoflow.core.node import ProcessorNode
+from videoflow.utils.downloader import get_file
 
+from .yolo3 import preprocessing
 from .yolo3.model import yolo_eval
 from .yolo3.utils import letterbox_image
-from .yolo3 import preprocessing
+
 
 class YOLO(ProcessorNode):
     def __init__(self, model_path = None, **kwargs):
@@ -48,7 +47,7 @@ class YOLO(ProcessorNode):
             self.anchors_path = get_file('yolo_anchors.txt', 'https://github.com/videoflow/videoflow-contrib/releases/download/models/yolo_anchors.txt')
         if self.classes_path is None:
             self.classes_path = get_file('coco_classes.txt', 'https://github.com/videoflow/videoflow-contrib/releases/download/models/yolo_anchors.txt')
-    
+
         self.class_names = self._get_class()
         self.anchors = self._get_anchors()
         self.sess = K.get_session()
@@ -81,10 +80,9 @@ class YOLO(ProcessorNode):
         # Generate colors for drawing bounding boxes.
         hsv_tuples = [(x / len(self.class_names), 1., 1.)
                       for x in range(len(self.class_names))]
-        self.colors = list(map(lambda x: colorsys.hsv_to_rgb(*x), hsv_tuples))
-        self.colors = list(
-            map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)),
-                self.colors))
+        self.colors = [colorsys.hsv_to_rgb(*x) for x in hsv_tuples]
+        self.colors = [(int(x[0] * 255), int(x[1] * 255), int(x[2] * 255))
+                       for x in self.colors]
         random.seed(10101)  # Fixed seed for consistent colors across runs.
         random.shuffle(self.colors)  # Shuffle colors to decorrelate adjacent classes.
         random.seed(None)  # Reset seed to default.
@@ -100,7 +98,7 @@ class YOLO(ProcessorNode):
         '''
         - Arguments:
             - image: np.array (h, w, 3) in rgb format.
-        
+
         - Returns:
             - return_boxs: an array of arrays [[x, y, w, h]]
         '''
@@ -119,7 +117,7 @@ class YOLO(ProcessorNode):
         #print(image_data.shape)
         image_data /= 255.
         image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
-        
+
         out_boxes, out_scores, out_classes = self.sess.run(
             [self.boxes, self.scores, self.classes],
             feed_dict={
@@ -133,9 +131,9 @@ class YOLO(ProcessorNode):
             if predicted_class != 'person' :
                 continue
             box = out_boxes[i]
-           # score = out_scores[i]  
-            x = int(box[1])  
-            y = int(box[0])  
+           # score = out_scores[i]
+            x = int(box[1])
+            y = int(box[0])
             w = int(box[3]-box[1])
             h = int(box[2]-box[0])
             if x < 0 :
@@ -143,14 +141,14 @@ class YOLO(ProcessorNode):
                 x = 0
             if y < 0 :
                 h = h + y
-                y = 0 
+                y = 0
             return_boxs.append([x,y,w,h])
-        
+
         nms_max_overlap = 1.0
         indices = preprocessing.non_max_suppression(return_boxs, nms_max_overlap)
         return_boxs = [return_boxs[i] for i in indices]
         return return_boxs
-    
+
     def process(self, image):
         return self.detect_image(image)
 

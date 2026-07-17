@@ -1,8 +1,8 @@
 from __future__ import absolute_import
+
 import numpy as np
-from . import kalman_filter
-from . import linear_assignment
-from . import iou_matching
+
+from . import iou_matching, kalman_filter, linear_assignment
 from .track import Track
 
 
@@ -56,7 +56,7 @@ class Tracker:
         ----------
         - detections : List[deep_sort.detection.Detection]
             A list of detections at the current time step.
-        
+
         Returns
         -------
         - matches: List[(int, int)] matche from track_id to det_id
@@ -89,7 +89,7 @@ class Tracker:
         self.metric.partial_fit(
             np.asarray(features), np.asarray(targets), active_targets)
         return matches, unmatched_tracks, unmatched_detections
-        
+
 
     def _match(self, detections):
 

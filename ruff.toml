@@ -1,0 +1,22 @@
+# Ruff config for videoflow-contrib, mirroring the core videoflow repo: real-bug
+# rules + import sorting, and the same relaxed style (the codebase uses the `x : int`
+# annotation spacing that whitespace rules would fight).
+target-version = "py312"
+line-length = 120
+# examples/ are illustrative scripts; yolo3 is vendored third-party YOLOv3 code kept
+# close to upstream — neither is held to the lint standard.
+extend-exclude = ["**/examples", "**/yolo3"]
+# force-exclude makes the excludes apply even to files pre-commit passes explicitly.
+force-exclude = true
+
+[lint]
+select = ["E9", "F", "B", "C4", "I"]
+ignore = [
+    "B008",  # function call in default arg — used intentionally in a few places
+    "E741",  # ambiguous var names (l/I) in existing math code
+    "B905",  # zip() without strict= — the zipped sequences are known-equal-length in
+             # this numeric/ML code; adding strict=False everywhere is noise, not safety
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]  # re-exports are intentional

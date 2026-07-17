@@ -1,0 +1,44 @@
+# Pre-commit hooks for videoflow-contrib, mirroring the core videoflow repo:
+# fast file-hygiene checks, ruff lint (auto-fix), and mypy type checks.
+#
+#   pipx install pre-commit   # or: uv tool install pre-commit
+#   pre-commit install        # enable the commit-stage hooks
+#
+# There is no pytest pre-push hook here (as in core): each component is its own
+# package with heavy, mutually-incompatible ML deps (tensorflow vs torch) and is
+# exercised in its own image, so a single local test env is not meaningful. CI
+# (.github/workflows/components.yml) validates descriptors and builds every wheel.
+#
+# Vendored third-party YOLOv3 code (yolo3/) is kept close to upstream — no hook
+# reformats it. This top-level exclude applies to the hygiene + ruff hooks; the
+# mypy hook repeats it in its own exclude (which overrides this default there).
+exclude: '(^|/)videoflow_contrib/yolo/yolo3/'
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        # component.yaml + the solutions' k8s manifests bundle several docs per file.
+        args: [--allow-multiple-documents]
+      - id: check-toml       # the per-component pyproject.toml + ruff.toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Config in ruff.toml (force-exclude handles examples/ and yolo3/).
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      # Isolated env (unlike core's `uv run mypy`): contrib has no single project
+      # environment, so mypy runs with ignore_missing_imports (config in mypy.ini)
+      # and treats the untyped ML deps as Any. Skip vendored/illustrative code.
+      - id: mypy
+        exclude: '(^|/)(examples|videoflow_contrib/yolo/yolo3)/'
