@@ -29,6 +29,7 @@ class Config:
     detector: dict = field(default_factory=dict)
     fusion: dict = field(default_factory=dict)
     debug_overlays: bool = False
+    flow_type: str = 'batch'           # 'batch' (recorded clips) or 'realtime' (live)
 
     @property
     def work(self) -> str:
@@ -76,6 +77,9 @@ def load_config(path: str) -> Config:
     trim = raw.get('trim', {})
     work_dir = os.path.abspath(raw.get('work_dir', './out'))
     os.makedirs(work_dir, exist_ok=True)
+    flow_type = str(raw.get('flow_type', 'batch')).lower()
+    if flow_type not in ('batch', 'realtime'):
+        raise ValueError(f"flow_type must be 'batch' or 'realtime', got {flow_type!r}")
     return Config(
         path=os.path.abspath(path),
         work_dir=work_dir,
@@ -90,4 +94,5 @@ def load_config(path: str) -> Config:
         detector=raw.get('detector', {}),
         fusion=raw.get('fusion', {}),
         debug_overlays=bool(raw.get('debug_overlays', False)),
+        flow_type=flow_type,
     )

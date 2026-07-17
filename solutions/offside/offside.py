@@ -26,7 +26,7 @@ def build_flow(cfg=None):
     if cfg is None:
         cfg = load_config('config.yaml')
     from videoflow.core import Flow
-    from videoflow.core.constants import BATCH
+    from videoflow.core.constants import BATCH, REALTIME
     from videoflow.core.policies import JoinPolicy
     from videoflow_contrib.multiview_fuser import MultiviewFuser
     from videoflow_contrib.offside_engine import OffsideEngine
@@ -88,7 +88,11 @@ def build_flow(cfg=None):
     if cfg.debug_overlays:
         sinks.append(WorldStateJsonlWriter(cfg.work_path('world_states.jsonl'),
                                            name='worldstate-writer')(fuser))
-    return Flow(sinks, flow_type=BATCH)
+    # BATCH (default) for recorded clips — lossless, blocking backpressure. REALTIME
+    # for a genuine live source: freshest-wins retention (a straggler frame can't stall
+    # live verdicts), but frames are dropped if the source outruns the fuser.
+    flow_type = REALTIME if cfg.flow_type == 'realtime' else BATCH
+    return Flow(sinks, flow_type=flow_type)
 
 
 def main():
@@ -96,6 +100,8 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', default='config.yaml')
+    ap.add_argument('--flow-type', choices=('batch', 'realtime'), default=None,
+                    help='override the config flow_type (default: from config, else batch)')
     args = ap.parse_args()
     # The local engine spawns worker subprocesses that must import `offside_nodes`
     # (and `common`) to reconstruct the glue nodes. Put this directory on PYTHONPATH
@@ -104,6 +110,8 @@ def main():
     os.environ['PYTHONPATH'] = here + os.pathsep + os.environ.get('PYTHONPATH', '')
 
     cfg = load_config(args.config)
+    if args.flow_type is not None:
+        cfg.flow_type = args.flow_type
     from videoflow.engines.local import LocalProcessEngine
     flow = build_flow(cfg)
     engine = LocalProcessEngine(blob_redis_url=os.environ.get('VIDEOFLOW_BLOB_REDIS_URL'))

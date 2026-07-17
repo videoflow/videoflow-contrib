@@ -1,6 +1,13 @@
 # Offside solution config. Copy to config.yaml and edit for your recording.
 work_dir: ./out
 
+# 'batch' (default) for recorded clips: lossless, blocking backpressure, runs to
+# completion. 'realtime' for a genuine live source: freshest-wins retention (a
+# straggler frame can't stall live verdicts) but frames are dropped if the source
+# outruns the fuser — only use it with a live/RTSP producer at real-time cadence,
+# not fast file replay. Overridable on the CLI: `python offside.py --flow-type realtime`.
+flow_type: batch
+
 # 2-5 fixed cameras. Order is the fusion input order; the first camera is the
 # audio-sync reference (offset 0).
 cameras:

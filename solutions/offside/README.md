@@ -127,9 +127,36 @@ GPU is optional (CPU works but is slow — RF-DETR + RTMW per camera). Set
 
 Per-camera stages (detector, pose, team) are `partitionable` — raise `nb_tasks`
 (with `partition_by='trace_id'`) to scale across GPUs. The fuser and engine are
-single-task by design (event-time join + sequential state). For a near-live mode,
-swap `SyncedVideoReader` for an RTSP reader with `timestamp_source='clock'` on
-PTP-disciplined hosts and switch the flow to `REALTIME`; the rest is unchanged.
+single-task by design (event-time join + sequential state).
+
+### BATCH vs REALTIME (`flow_type`)
+
+The flow runs in one of two modes, selectable in the config (`flow_type: batch|realtime`)
+or on the CLI (`python offside.py --flow-type realtime`, which overrides the config):
+
+- **`batch`** (default) — for **recorded clips**. Lossless: streams use interest
+  retention with blocking backpressure, so no frame is dropped, and the flow runs to
+  completion (each worker exits when its upstream drains). This is what the prep-script
+  workflow below assumes.
+- **`realtime`** — for a **genuine live source**. Streams keep only the freshest frame
+  (`max_msgs=1`, drop-oldest, non-blocking publish), so a straggler frame can never stall
+  a live verdict — but frames are **dropped whenever the source outruns the fuser**. The
+  fuser/engine/visualizer code is identical in both modes (the event-time join policy is
+  set explicitly, independent of flow type); only the broker retention and termination
+  characteristics change.
+
+  Because REALTIME is freshest-wins, it is only appropriate when the producer emits at
+  true real-time cadence and dropping frames to keep up is acceptable. **Do not** point it
+  at fast file replay through `SyncedVideoReader` — the reader emits frames as fast as it
+  can decode, so most would be evicted before the fuser sees them and the kick→touch
+  detection would fall apart. For a real near-live deployment, swap `SyncedVideoReader`
+  for an RTSP reader with `timestamp_source='clock'` on PTP/NTP-disciplined hosts (the
+  time-join keys on `event_ts`, so live sources must be clock-synchronized) and set
+  `flow_type: realtime`; the rest of the pipeline is unchanged.
+
+  The REALTIME broker path (event-time join → engine verdicts → visualizer) is verified
+  end-to-end on a synthetic 2-camera fixture driven by real-time-paced producers, yielding
+  the same OFFSIDE verdict as BATCH.
 
 
 ## Model weights (auto-downloaded on first use)
