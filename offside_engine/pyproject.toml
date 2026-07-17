@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_offside_engine"
+version = "0.1"
+description = "Stateful offside decision engine (touch detection, kick-to-touch pairing, Law-11 geometry) for Videoflow"
+license = { text = "MIT" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "numpy>=1.24",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/offside_engine"]

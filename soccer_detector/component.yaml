@@ -1,0 +1,36 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/soccer-detector
+  version: "0.1"
+  license: Apache-2.0
+  description: Soccer detector (players, goalkeepers, referees, ball). backend='rfdetr' (RF-DETR-Large SoccerNet, highest accuracy, needs torch>=2.4) or 'yolo' (YOLOv8 soccer model, runs anywhere). Per-class thresholds and optional tiled inference for distant-ball recall. Emits y-first detections.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.soccer_detector.SoccerDetector
+    images:
+      cpu: ghcr.io/videoflow/contrib-soccer-detector:0.1
+      gpu: ghcr.io/videoflow/contrib-soccer-detector:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        backend: {type: string, default: rfdetr, enum: [rfdetr, yolo]}
+        checkpoint: {type: ["string", "null"], default: null, description: Local weights; else fetched per backend.}
+        resolution: {type: integer, default: 1280, description: RF-DETR input size.}
+        model_size: {type: string, default: large, enum: [large, base], description: RF-DETR checkpoint size.}
+        conf_person: {type: number, default: 0.35, minimum: 0, maximum: 1}
+        conf_ball: {type: number, default: 0.15, minimum: 0, maximum: 1}
+        tile_inference: {type: boolean, default: false}
+        tile_rows: {type: integer, default: 2, minimum: 1}
+        tile_cols: {type: integer, default: 3, minimum: 1}
+        tile_overlap: {type: number, default: 0.1, minimum: 0, maximum: 0.5}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}   # (N, 6): [ymin, xmin, ymax, xmax, class_id, score]; classes {0:player,1:gk,2:ref,3:ball}
+  constraints: {partitionable: true}

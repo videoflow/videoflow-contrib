@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_pose_topdown"
+version = "0.1"
+description = "Top-down multi-person pose (RTMW/RTMPose/ViTPose via rtmlib) with canonical-26 remap for Videoflow"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "numpy>=1.24",
+    "rtmlib>=0.0.13",
+    "onnxruntime>=1.17",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+# GPU: swap onnxruntime for onnxruntime-gpu (rtmlib uses the CUDA provider).
+[project.optional-dependencies]
+gpu = ["onnxruntime-gpu>=1.17"]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/pose_topdown"]

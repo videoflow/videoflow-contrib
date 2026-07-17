@@ -1,0 +1,34 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/offside-visualizer
+  version: "0.1"
+  license: MIT
+  description: Offside verdict visualizer (consumer). Writes verdict JSON, re-opens camera videos from disk to render the projected offside line + player/ball markers per view, a top-down pitch diagram, and optional annotated clips.
+spec:
+  role: consumer
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.offside_visualizer.OffsideVisualizer
+    images:
+      cpu: ghcr.io/videoflow/contrib-offside-visualizer:0.1
+  device: [cpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      required: [output_dir, videos, offsets]
+      properties:
+        output_dir: {type: string}
+        videos: {type: object, description: "{cam: video_path} — original recordings on local disk."}
+        offsets: {type: object, description: "{cam: offset_s} from audio sync."}
+        calibration: {type: ["object", "null"], default: null}
+        calibration_path: {type: ["string", "null"], default: null}
+        pitch_length: {type: number, default: 105.0, minimum: 40}
+        pitch_width: {type: number, default: 68.0, minimum: 20}
+        clip_padding_s: {type: number, default: 3.0, minimum: 0}
+        write_clips: {type: boolean, default: true}
+  io:
+    inputs:
+      - {name: verdicts, type: videoflow.v1.Value}
+  constraints: {singleton: true}

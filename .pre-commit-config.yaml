@@ -42,3 +42,4 @@ repos:
       # and treats the untyped ML deps as Any. Skip vendored/illustrative code.
       - id: mypy
         exclude: '(^|/)(examples|videoflow_contrib/yolo/yolo3)/'
+        additional_dependencies: [types-PyYAML]

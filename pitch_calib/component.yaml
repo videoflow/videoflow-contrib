@@ -1,0 +1,29 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/pitch-calib
+  version: "0.1"
+  license: AGPL-3.0
+  description: Soccer-pitch landmark detector for camera calibration. Regresses named pitch keypoints per frame; paired with the PnP/DLT solver library it recovers full camera intrinsics + extrinsics from pitch markings. (AGPL via the Ultralytics backend.)
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.pitch_calib.PitchLandmarks
+    images:
+      cpu: ghcr.io/videoflow/contrib-pitch-calib:0.1
+      gpu: ghcr.io/videoflow/contrib-pitch-calib:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        backend: {type: string, default: yolo32, enum: [yolo32, pnlcalib]}
+        weights: {type: ["string", "null"], default: null, description: Local weights path; else fetched by backend.}
+        conf: {type: number, default: 0.3, minimum: 0, maximum: 1}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}   # (K, 3): [x, y, conf] in canonical landmark order
+  constraints: {partitionable: true}

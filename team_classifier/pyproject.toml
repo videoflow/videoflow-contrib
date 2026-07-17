@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_team_classifier"
+version = "0.1"
+description = "Stateless team/GK/referee classifier (HSV or SigLIP-2 nearest-centroid) for Videoflow"
+license = { text = "MIT" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+# SigLIP-2 embedding backend (optional; HSV is the default and needs neither).
+[project.optional-dependencies]
+siglip = ["transformers>=4.45", "torch>=2.2"]
+gpu = ["transformers>=4.45", "torch>=2.2"]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/team_classifier"]

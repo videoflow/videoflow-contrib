@@ -1,0 +1,32 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/synced-video-reader
+  version: "0.1"
+  license: MIT
+  description: Videofile producer that shifts each frame's event timestamp by a per-camera offset (from audio sync), aligning independent recordings on a common time axis for the time-synchronized multi-camera join.
+spec:
+  role: producer
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.synced_video_reader.SyncedVideoReader
+    images:
+      cpu: ghcr.io/videoflow/contrib-synced-video-reader:0.1
+  device: [cpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      required: [video_file]
+      properties:
+        video_file: {type: string, description: Path to this camera's recording.}
+        offset_s: {type: number, default: 0.0, description: Seconds added to reach the common time axis (reference camera = 0).}
+        drift_ppm: {type: number, default: 0.0, description: Clock-drift correction in parts-per-million.}
+        start_s: {type: ["number", "null"], default: null, description: Trim start (event seconds).}
+        end_s: {type: ["number", "null"], default: null, description: Trim end (event seconds).}
+        swap_channels: {type: boolean, default: false, description: BGR to RGB (pipeline uses BGR).}
+        nb_frames: {type: integer, default: -1, description: Max frames to read (-1 = all).}
+  io:
+    inputs: []
+    output: {type: videoflow.v1.Tensor}   # (frame_index, frame_bgr) tuple
+  constraints: {singleton: true}

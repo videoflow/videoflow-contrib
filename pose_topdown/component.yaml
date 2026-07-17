@@ -1,0 +1,33 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/pose-topdown
+  version: "0.1"
+  license: Apache-2.0
+  description: Top-down multi-person pose on tracked boxes via rtmlib (RTMW whole-body/RTMPose/ViTPose). Remaps any backend to a canonical 26-keypoint layout (body + feet). Row-aligned with input tracks (identity-preserving).
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.pose_topdown.PoseTopDown
+    images:
+      cpu: ghcr.io/videoflow/contrib-pose-topdown:0.1
+      gpu: ghcr.io/videoflow/contrib-pose-topdown:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        backend: {type: string, default: rtmw, enum: [rtmw, rtmpose, vitpose, sapiens]}
+        kpt_format: {type: string, default: wholebody133, enum: [wholebody133, halpe26, coco17]}
+        onnx_url: {type: ["string", "null"], default: null}
+        model_input_size: {type: array, items: {type: integer}, default: [288, 384]}
+        kpt_min_conf: {type: number, default: 0.0, minimum: 0, maximum: 1}
+        allow_noncommercial: {type: boolean, default: false, description: Required for the Sapiens backend (CC-BY-NC weights).}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+      - {name: tracks, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}   # (N, 26, 3): [x, y, score], row-aligned with tracks
+  constraints: {partitionable: true}

@@ -1,0 +1,13 @@
+# Runtime + prep-script deps for the offside solution (CPU). torch is installed via
+# the PyTorch index in the Dockerfile; the contrib sub-packages are installed
+# --no-deps against this pre-resolved ML stack. ffmpeg must be on PATH (audio sync).
+numpy>=1.24
+scipy>=1.11
+pyyaml>=6.0
+pillow
+rfdetr>=1.0
+boxmot>=11.0
+rtmlib>=0.0.13
+onnxruntime>=1.17
+ultralytics>=8.2
+scikit-learn>=1.3

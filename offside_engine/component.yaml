@@ -1,0 +1,37 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/offside-engine
+  version: "0.1"
+  license: MIT
+  description: Stateful offside decision engine. Consumes a stream of reconstructed 3D world states, detects ball touches, pairs kick to next touch, backward-associates the receiver to the kick instant, and emits Law-11 offside verdicts.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.offside_engine.OffsideEngine
+    images:
+      cpu: ghcr.io/videoflow/contrib-offside-engine:0.1
+  device: [cpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        pitch_length: {type: number, default: 105.0, minimum: 40}
+        pitch_width: {type: number, default: 68.0, minimum: 20}
+        attack_direction: {type: ["string", "object"], default: auto, description: "'auto' or a {team_id: '+x'|'-x'} map."}
+        touch_radius_m: {type: number, default: 1.1, minimum: 0}
+        vel_jump_ms: {type: number, default: 3.0, minimum: 0}
+        dir_change_deg: {type: number, default: 25.0, minimum: 0, maximum: 180}
+        min_gap_frames: {type: integer, default: 5, minimum: 1}
+        buffer_s: {type: number, default: 15.0, minimum: 1}
+        margin_tolerance_m: {type: number, default: 0.15, minimum: 0}
+        kpt_format: {type: string, default: halpe26, enum: [halpe26, wholebody133, coco17]}
+        detection_lag_frames: {type: integer, default: 8, minimum: 1}
+        ref_fps: {type: number, default: 30.0, minimum: 1}
+  io:
+    inputs:
+      - {name: world_state, type: videoflow.v1.Value}
+    output: {type: videoflow.v1.Value}   # offside_verdict / touch_event dicts, or null
+  constraints: {singleton: true}

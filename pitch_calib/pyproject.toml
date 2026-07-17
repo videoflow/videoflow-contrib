@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_pitch_calib"
+version = "0.1"
+description = "Soccer-pitch landmark detection + PnP/DLT camera calibration for Videoflow"
+license = { text = "AGPL-3.0" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "ultralytics>=8.2",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+# GPU: ultralytics uses torch; the -cuda base image provides CUDA torch.
+[project.optional-dependencies]
+gpu = ["ultralytics>=8.2"]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/pitch_calib"]

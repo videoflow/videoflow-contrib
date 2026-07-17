@@ -1,0 +1,13 @@
+# Runtime + prep-script deps for the offside solution (GPU). CUDA torch is installed
+# via the PyTorch cu124 index in gpu.Dockerfile; onnxruntime-gpu replaces onnxruntime
+# so rtmlib uses the CUDA execution provider.
+numpy>=1.24
+scipy>=1.11
+pyyaml>=6.0
+pillow
+rfdetr>=1.0
+boxmot>=11.0
+rtmlib>=0.0.13
+onnxruntime-gpu>=1.17
+ultralytics>=8.2
+scikit-learn>=1.3

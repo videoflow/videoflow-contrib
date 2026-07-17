@@ -1,0 +1,37 @@
+# Offside solution config. Copy to config.yaml and edit for your recording.
+work_dir: ./out
+
+# 2-5 fixed cameras. Order is the fusion input order; the first camera is the
+# audio-sync reference (offset 0).
+cameras:
+  cam0: {video: /data/cam0.mp4}
+  cam1: {video: /data/cam1.mp4}
+  cam2: {video: /data/cam2.mp4}
+
+# MEASURE these with a tape — amateur pitches vary a lot and the offside line is
+# computed in metres. (FIFA standard is 105 x 68.)
+pitch:
+  length: 100.0
+  width: 64.0
+
+# 'auto' infers the attack direction per team from the goalkeepers' positions.
+# Override explicitly if auto is unreliable: {0: '+x', 1: '-x'}.
+attack_direction: auto
+
+# Cosmetic labels; fill in after inspecting out/teams_montage.png from fit_teams.py.
+team_names: {0: Reds, 1: Blues}
+
+# Optional trim to the play of interest (event seconds on the common axis).
+trim: {start_s: null, end_s: null}
+
+detector:
+  checkpoint: null        # null → fetch the soccer RF-DETR checkpoint
+  resolution: 1288        # divisible by 56; raise for small/distant balls
+  conf_ball: 0.15
+  tile_inference: false   # enable for very distant balls (slower)
+
+fusion:
+  ref_fps: 30.0
+  quorum: 2               # emit a moment with >= 2 camera views
+
+debug_overlays: false     # also write per-camera annotated .avi (tracks/teams/skeletons)

@@ -1,0 +1,32 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/team-classifier
+  version: "0.1"
+  license: MIT
+  description: Stateless team/GK/referee classifier. Nearest-centroid over torso embeddings (HSV histogram default, SigLIP-2 optional); centroids fit once offline for global cross-camera consistency. Row-aligned with input tracks.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.team_classifier.TeamClassifier
+    images:
+      cpu: ghcr.io/videoflow/contrib-team-classifier:0.1
+      gpu: ghcr.io/videoflow/contrib-team-classifier:0.1-cuda
+  device: [cpu, gpu]
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        centroids: {type: ["object", "null"], default: null, description: "Inline {method, classes, vectors} dict."}
+        centroids_path: {type: ["string", "null"], default: null, description: Path to teams.json.}
+        method: {type: string, default: hsv, enum: [hsv, siglip]}
+        min_crop_h: {type: integer, default: 24, minimum: 1}
+        siglip_model: {type: string, default: google/siglip2-base-patch16-224}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+      - {name: tracks, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Tensor}   # (N, 2): [class_id, confidence]; classes {0:team0,1:team1,2:gk,3:ref,-1:unknown}
+  constraints: {partitionable: true}
