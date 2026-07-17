@@ -1,47 +1,35 @@
-# To build: docker build -t detector_tf -f Dockerfile .
-# To run: docker run -it detector_tf
-FROM tensorflow/tensorflow:1.14.0-py3
+# videoflow-contrib :: solutions/face_obfuscation — detect + track + blur faces.
+#
+# This solution's graph (face_obfuscation.py:build_flow) wires together nodes from
+# videoflow_contrib.detector_tf (TensorFlow) and videoflow_contrib.tracker_sort, plus
+# a couple of local nodes defined in the script itself. All node classes must be
+# importable in the worker, so this image installs both sub-packages AND the script
+# module (importable as `face_obfuscation`, which is how its local nodes appear in
+# VF_NODE_CLASS). Python is pinned to 3.11 because of the TensorFlow-2 (Keras-2) node.
+#
+# Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
+#   docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-contrib-face-obfuscation:latest .
+#
+# Deploy (input path comes from VF_INPUT_VIDEO at runtime):
+#   videoflow deploy face_obfuscation.py:build_flow --nats nats://... \
+#       --image videoflow-contrib-face-obfuscation:latest
+ARG BASE_IMAGE=videoflow-base:py3.11
+FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN echo "deb http://old-releases.ubuntu.com/ubuntu/ yakkety universe" | tee -a /etc/apt/sources.list
-RUN apt-get update && apt-get install -y \ 
- wget \
- git \
- pkg-config \
- ffmpeg \
- pkg-config \
- python-dev \ 
- python-opencv \ 
- libopencv-dev \ 
- libav-tools  \ 
- libjpeg-dev \ 
- libpng-dev \ 
- libtiff-dev \ 
- libjasper-dev \ 
- python-numpy \ 
- python-pycurl \ 
- python-opencv
+WORKDIR /app
 
-# create a non-root user
-ARG USER_ID=1000
-RUN useradd -m --no-log-init --system  --uid ${USER_ID} appuser -g sudo
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER appuser
-WORKDIR /home/appuser
+# Solution dependencies (on top of videoflow-base's built-in node deps).
+COPY solutions/face_obfuscation/requirements.txt ./
+RUN uv pip install --system --no-cache -r requirements.txt
 
-ENV PATH="/home/appuser/.local/bin:${PATH}"
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	python3 get-pip.py --user && \
-	rm get-pip.py
+# The contrib sub-packages this solution's graph imports. --no-deps: videoflow is
+# already in the base image.
+COPY detector_tf /src/detector_tf
+COPY tracker_sort /src/tracker_sort
+RUN uv pip install --system --no-cache --no-deps /src/detector_tf /src/tracker_sort
 
-# Installing videoflow
-RUN git clone https://github.com/videoflow/videoflow.git
-RUN pip3 install --user /home/appuser/videoflow --find-links /home/appuser/videoflow
+# The solution graph module, importable as `face_obfuscation` so the worker can build
+# its local node classes (FrameIndexSplitter, BoundingboxObfuscator).
+COPY solutions/face_obfuscation/face_obfuscation.py ./
 
-# Installing videoflow_contrib.detector_tf and tracker
-RUN git clone https://github.com/videoflow/videoflow-contrib.git
-RUN pip3 install --user /home/appuser/videoflow-contrib/detector_tf --find-links /home/appuser/videoflow-contrib/detector_tf
-RUN pip3 install --user /home/appuser/videoflow-contrib/tracker_sort --find-links /home/appuser/videoflow-contrib/tracker_sort
-
-# Command to run example
-CMD ["python3", "/home/appuser/videoflow-contrib/solutions/face_obfuscation/face_obfuscation.py"]
+# ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

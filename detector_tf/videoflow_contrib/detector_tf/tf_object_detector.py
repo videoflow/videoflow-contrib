@@ -10,7 +10,7 @@ from videoflow.processors.vision.detectors import ObjectDetector
 from .tensorflow_utils import TensorflowModel, TfliteModel
 from videoflow.utils.downloader import get_file
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/download/detector_tf/'
 

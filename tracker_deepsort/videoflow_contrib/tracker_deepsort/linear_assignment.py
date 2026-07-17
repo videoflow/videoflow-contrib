@@ -1,7 +1,18 @@
 from __future__ import absolute_import
 import numpy as np
-from sklearn.utils.linear_assignment_ import linear_assignment
+from scipy.optimize import linear_sum_assignment
 from . import kalman_filter
+
+def linear_assignment(cost_matrix):
+    '''
+    Drop-in replacement for the long-removed ``sklearn.utils.linear_assignment_``
+    (deleted in scikit-learn 0.23). Returns the matches as an ``(N, 2)`` array of
+    ``[row, col]`` index pairs, matching the old sklearn return shape.
+    '''
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    if len(row_ind) == 0:
+        return np.empty((0, 2), dtype=int)
+    return np.array(list(zip(row_ind, col_ind)))
 
 
 INFTY_COST = 1e+5

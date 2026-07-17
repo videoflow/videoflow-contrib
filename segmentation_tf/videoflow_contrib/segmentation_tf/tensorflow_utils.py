@@ -2,7 +2,12 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
-import tensorflow as tf
+# This module uses the TF1 graph/session API (frozen .pb graphs, tf.Session,
+# tf.gfile, tf.import_graph_def). Under TensorFlow 2 those live under tf.compat.v1,
+# so we import that namespace as ``tf`` and disable v2 behaviour to keep the original
+# graph-mode semantics. This lets the module run on modern TF2 / Python 3.9-3.12.
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 class TfliteModel:
     '''

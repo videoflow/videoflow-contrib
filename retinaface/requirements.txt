@@ -1,0 +1,4 @@
+mxnet>=1.9.1
+Cython>=0.29
+scikit-image>=0.19
+easydict>=1.9

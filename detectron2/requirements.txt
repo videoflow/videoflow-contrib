@@ -1,0 +1,4 @@
+# torch/torchvision are installed first (see Dockerfile) because detectron2 needs them
+# present at build time. Kept here for reference / rebuilds.
+torch>=2.1
+torchvision>=0.16

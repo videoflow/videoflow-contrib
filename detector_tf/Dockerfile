@@ -1,47 +1,32 @@
-# To build: docker build -t detector_tf -f Dockerfile .
-# To run: docker run -it detector_tf
-FROM tensorflow/tensorflow:1.14.0-py3
+# videoflow-contrib :: detector_tf — TensorFlow-2 (Keras-2) object detector.
+#
+# A deployable worker image for the new distributed videoflow: it builds on
+# videoflow-base (framework + broker client + py3.11 interpreter) and adds this
+# component's dependencies and package. The worker entrypoint (python -m
+# videoflow.worker) is inherited from the base.
+#
+# Prerequisite: build the base image once (from the videoflow repo root):
+#   ./docker/build-images.sh            # produces videoflow-base:py3.11 (and others)
+#
+# Build this component image (context = this module directory):
+#   docker build -t videoflow-contrib-detector_tf:latest detector_tf/
+#
+# Deploy: pass it as the flow's --image default, or pin it on a node
+#   MyNode(name='...', image='videoflow-contrib-detector_tf:latest')
+ARG BASE_IMAGE=videoflow-base:py3.11
+FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN echo "deb http://old-releases.ubuntu.com/ubuntu/ yakkety universe" | tee -a /etc/apt/sources.list
-RUN apt-get update && apt-get install -y \ 
- wget \
- git \
- pkg-config \
- ffmpeg \
- pkg-config \
- python-dev \ 
- python-opencv \ 
- libopencv-dev \ 
- libav-tools  \ 
- libjpeg-dev \ 
- libpng-dev \ 
- libtiff-dev \ 
- libjasper-dev \ 
- python-numpy \ 
- python-pycurl \ 
- python-opencv
+WORKDIR /app
 
-# create a non-root user
-ARG USER_ID=1000
-RUN useradd -m --no-log-init --system  --uid ${USER_ID} appuser -g sudo
-RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER appuser
-WORKDIR /home/appuser
+# Component dependencies (installed on top of videoflow-base's built-in node deps:
+# OpenCV, ffmpeg, NumPy, the NATS client, Redis, PyYAML).
+COPY requirements.txt ./
+RUN uv pip install --system --no-cache -r requirements.txt
 
-ENV PATH="/home/appuser/.local/bin:${PATH}"
-RUN wget https://bootstrap.pypa.io/get-pip.py && \
-	python3 get-pip.py --user && \
-	rm get-pip.py
+# The videoflow_contrib.detector_tf package. It must be importable by its module path
+# (the path that appears in VF_NODE_CLASS), so install it. --no-deps: videoflow itself
+# is already present in the base image.
+COPY . ./
+RUN uv pip install --system --no-cache --no-deps .
 
-# Installing videoflow
-RUN git clone https://github.com/videoflow/videoflow.git
-RUN pip3 install --user /home/appuser/videoflow --find-links /home/appuser/videoflow
-
-# Installing videoflow_contrib.detector_tf
-RUN mkdir -p /home/appuser/videoflow_contrib/detector_tf
-COPY . /home/appuser/videoflow_contrib/detector_tf
-RUN pip3 install --user /home/appuser/videoflow_contrib/detector_tf --find-links /home/appuser/videoflow_contrib/detector_tf
-
-# Command to run example
-CMD ["python3", "/home/appuser/videoflow_contrib/detector_tf/examples/object_detector.py"]
+# ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

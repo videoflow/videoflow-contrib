@@ -5,8 +5,20 @@ from __future__ import absolute_import
 from videoflow.processors.vision.trackers import BoundingBoxTracker
 import numpy as np
 from filterpy.kalman import KalmanFilter
-from sklearn.utils.linear_assignment_ import linear_assignment
+from scipy.optimize import linear_sum_assignment
 import math
+
+def linear_assignment(cost_matrix):
+    '''
+    Drop-in replacement for the long-removed ``sklearn.utils.linear_assignment_``
+    (deleted in scikit-learn 0.23). Solves the assignment problem with SciPy's
+    Hungarian implementation and returns the matches as an ``(N, 2)`` array of
+    ``[row, col]`` index pairs, matching the old sklearn return shape.
+    '''
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    if len(row_ind) == 0:
+        return np.empty((0, 2), dtype=int)
+    return np.array(list(zip(row_ind, col_ind)))
 
 def eucl(bb_test, bb_gt):
     '''

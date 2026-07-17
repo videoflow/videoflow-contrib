@@ -4,7 +4,11 @@ from __future__ import absolute_import
 
 import numpy as np
 import cv2
-import tensorflow as tf
+# TF1 graph/session API (tf.Session, tf.gfile, tf.import_graph_def) lives under
+# tf.compat.v1 in TensorFlow 2; disable v2 behaviour to keep graph-mode semantics so
+# this node runs on modern TF2 / Python 3.9-3.12.
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 from videoflow.core.node import ProcessorNode
 from .tensorflow_utils import TensorflowModel

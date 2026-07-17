@@ -3,13 +3,16 @@
 from functools import wraps
 
 import numpy as np
-import tensorflow as tf
-from keras import backend as K
-from keras.layers import Conv2D, Add, ZeroPadding2D, UpSampling2D, Concatenate
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.normalization import BatchNormalization
-from keras.models import Model
-from keras.regularizers import l2
+# Standalone (multi-backend) Keras 2 is unmaintained; on TensorFlow 2 the same API is
+# available under tf.compat.v1.keras and the TF1 graph ops (tf.boolean_mask,
+# tf.image.non_max_suppression, tf.TensorArray, ...) under tf.compat.v1.
+import tensorflow.compat.v1 as tf
+from tensorflow.compat.v1.keras import backend as K
+from tensorflow.compat.v1.keras.layers import Conv2D, Add, ZeroPadding2D, UpSampling2D, Concatenate
+from tensorflow.compat.v1.keras.layers import LeakyReLU
+from tensorflow.compat.v1.keras.layers import BatchNormalization
+from tensorflow.compat.v1.keras.models import Model
+from tensorflow.compat.v1.keras.regularizers import l2
 
 from .utils import compose
 

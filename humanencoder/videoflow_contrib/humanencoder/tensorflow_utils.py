@@ -2,7 +2,10 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
-import tensorflow as tf
+# TF1 graph/session API under TensorFlow 2 lives in tf.compat.v1; disable v2 behaviour
+# to keep the original graph-mode semantics (see the node modules for details).
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 class TfliteModel:
     '''

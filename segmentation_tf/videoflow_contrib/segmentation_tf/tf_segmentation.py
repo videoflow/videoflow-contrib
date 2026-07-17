@@ -10,7 +10,10 @@ from videoflow.processors.vision.segmentation import Segmenter
 from .tensorflow_utils import TensorflowModel
 from videoflow.utils.downloader import get_file
 
-import tensorflow as tf
+# TF1 graph ops (tf.image.crop_and_resize with box_ind, tf.Session, tf.gfile, ...)
+# live under tf.compat.v1 in TensorFlow 2; tensorflow_utils already calls
+# disable_v2_behavior() on import to keep graph-mode semantics.
+import tensorflow.compat.v1 as tf
 
 BASE_URL_SEGMENTATION = 'https://github.com/videoflow/videoflow-contrib/releases/download/segmentation_tf/'
 
