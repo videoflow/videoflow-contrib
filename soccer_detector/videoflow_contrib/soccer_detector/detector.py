@@ -20,13 +20,22 @@ from videoflow.core.constants import GPU
 from videoflow.processors.vision.detectors import ObjectDetector
 from videoflow.utils.downloader import get_file
 
+# Durable mirror of the community-hosted weights, on our own release (fallback source).
 BASE_URL = 'https://github.com/videoflow/videoflow-contrib/releases/download/offside_models/'
-_DEFAULT_WEIGHTS = 'rfdetr_soccernet.pth'
-# Real HF-hosted YOLOv8 soccer detector (runs anywhere via ultralytics; the RF-DETR
-# backend needs torch >= 2.4, which some platforms — e.g. x86 macOS — can't provide).
-_YOLO_WEIGHTS = ('yolo-football-player-detection.pt',
-                 'https://huggingface.co/martinjolif/yolo-football-player-detection/'
-                 'resolve/main/yolo-football-player-detection.pt')
+# RF-DETR-Large fine-tuned on SoccerNet (85.7% mAP@50, 1.57 GB). Primary = the real
+# HF checkpoint; fallback = our GitHub-release mirror. get_file tries them in order.
+_RFDETR_FNAME = 'rfdetr_soccernet.pth'
+_RFDETR_WEIGHTS = (_RFDETR_FNAME,
+                   ['https://huggingface.co/julianzu9612/RFDETR-Soccernet/'
+                    'resolve/main/weights/checkpoint_best_regular.pth',
+                    BASE_URL + _RFDETR_FNAME])
+# HF-hosted YOLOv8 soccer detector (runs anywhere via ultralytics; the RF-DETR backend
+# needs torch >= 2.4, which some platforms — e.g. x86 macOS — can't provide).
+_YOLO_FNAME = 'yolo-football-player-detection.pt'
+_YOLO_WEIGHTS = (_YOLO_FNAME,
+                 ['https://huggingface.co/martinjolif/yolo-football-player-detection/'
+                  'resolve/main/' + _YOLO_FNAME,
+                  BASE_URL + _YOLO_FNAME])
 # Canonical class ids the rest of the pipeline expects.
 PLAYER, GOALKEEPER, REFEREE, BALL = 0, 1, 2, 3
 
@@ -76,7 +85,7 @@ class SoccerDetector(ObjectDetector):
                 self._class_map = dict(self.YOLO_CLASS_MAP)
         else:  # rfdetr — RF-DETR-Large SoccerNet checkpoint (128M, DINOv2, 1280 res)
             import rfdetr  # lazy: heavy (torch >= 2.4)
-            path = self._checkpoint or get_file(_DEFAULT_WEIGHTS, BASE_URL + _DEFAULT_WEIGHTS)
+            path = self._checkpoint or get_file(*_RFDETR_WEIGHTS)
             Model = rfdetr.RFDETRLarge if self._model_size == 'large' else rfdetr.RFDETRBase
             self._model = Model(pretrain_weights=path, resolution=self._resolution)
             try:

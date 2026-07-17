@@ -135,17 +135,56 @@ PTP-disciplined hosts and switch the flow to `REALTIME`; the rest is unchanged.
 ## Model weights (auto-downloaded on first use)
 
 Each model backend fetches its weights on first `open()` (cached under `~/.videoflow`
-or the library's own cache):
+or the library's own cache) — no manual download step is required to run:
 
 - **Detector (yolo):** `martinjolif/yolo-football-player-detection` (HF) — classes
   `{0:ball, 1:goalkeeper, 2:player, 3:referee}`.
 - **Detector (rfdetr):** `julianzu9612/RFDETR-Soccernet` (HF, `weights/checkpoint_best_regular.pth`,
-  1.5 GB) — classes `{0:ball, 1:player, 2:referee, 3:goalkeeper}`.
+  1.57 GB) — classes `{0:ball, 1:player, 2:referee, 3:goalkeeper}`.
 - **Pose:** OpenMMLab RTMPose-x Halpe26 ONNX (rtmlib cache).
 - **Pitch:** `martinjolif/yolo-football-pitch-detection` (HF) — 32 keypoints in
   roboflow `SoccerPitchConfiguration` order.
 - **Tracker ReID:** pass `reid_weights=` to enable appearance ReID; otherwise BoT-SORT
   runs motion + camera-motion-compensation only.
+
+### Source, mirror & durability
+
+The detector and pitch weights live on **community HuggingFace repos** (the primary
+source). To stay resilient if an upstream repo disappears or rate-limits, each of these
+also has a **durable fallback** on our own release:
+`https://github.com/videoflow/videoflow-contrib/releases/download/offside_models/`.
+`videoflow.utils.downloader.get_file` receives an ordered `[upstream, mirror]` URL list
+and tries them in order, so a run keeps working even if the community repo goes away.
+Pose (OpenMMLab), tracker ReID (boxmot zoo) and the optional SigLIP team backend (Google)
+stay on their official project infrastructure.
+
+To (re)build the mirror release (maintainers only — needs the `gh` CLI and release
+access to the `videoflow` org): pre-fetch the files locally with the script below, then
+`gh release create offside_models --title 'Offside model weights' \
+~/.videoflow/models/rfdetr_soccernet.pth \
+~/.videoflow/models/yolo-football-player-detection.pt \
+~/.videoflow/models/yolo-football-pitch-detection.pt`.
+
+### Pre-fetching (containers / offline / cache volume)
+
+The Docker images stay lean — weights are **not** baked in; they download on first run.
+To avoid re-downloading (especially the 1.57 GB RF-DETR checkpoint) on every fresh
+container, warm the caches once and mount them as volumes:
+
+```bash
+# Warm ~/.videoflow/models and ~/.cache/rtmlib on the host (uses the same URL lists the
+# components use; --skip-rfdetr / --skip-pose to trim). Run in an env with the deps.
+python download_weights.py                 # full default pipeline
+python download_weights.py --skip-rfdetr   # yolo detector backend only (skip 1.57 GB)
+
+# Then reuse those caches inside the container instead of re-downloading:
+docker run --rm \
+  -v "$HOME/.videoflow:/root/.videoflow" \
+  -v "$HOME/.cache:/root/.cache" \
+  <offside-image> python offside.py --config config.yaml
+```
+
+Set `VIDEOFLOW_HOME` to relocate the `~/.videoflow` cache if `$HOME` isn't writable.
 
 ## Verification status
 
@@ -157,8 +196,11 @@ backend** requires `torch>=2.4` and so cannot run on x86-64 macOS (no PyTorch wh
 > 2.2.2 there) — its output-format logic is unit-tested via a mock, and it runs on
 Linux/GPU or Apple Silicon.
 
+Weights download at runtime from their upstream sources with a durable GitHub-release
+fallback (see above); pre-fetch with `download_weights.py` for offline/container runs.
+The maintainer step of uploading the mirror release itself is a one-time ops task.
 Not yet done: the full **distributed flow** end-to-end (needs NATS + Redis + Docker +
-multi-camera footage) and hosting a consolidated weights bundle. Two inherent limits,
+multi-camera footage). Two inherent limits,
 documented rather than hidden: sub-frame kick timing is frame-rate-limited (~±1 frame
 at 30 fps — why FIFA uses a 500 Hz ball IMU), and the ground-point back-projection is
 association-grade (~0.2–0.3 m at range; the precise offside line uses the triangulated

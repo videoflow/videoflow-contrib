@@ -20,12 +20,16 @@ from videoflow.utils.downloader import get_file
 
 from .model import PitchModel
 
-# Real HF-hosted YOLOv8x-pose pitch model (32 keypoints, roboflow SoccerPitchConfiguration
-# order): martinjolif/yolo-football-pitch-detection.
+# HF-hosted YOLOv8x-pose pitch model (32 keypoints, roboflow SoccerPitchConfiguration
+# order): martinjolif/yolo-football-pitch-detection. Primary = the community HF repo;
+# fallback = our durable GitHub-release mirror. get_file tries them in order.
+_MIRROR_URL = ('https://github.com/videoflow/videoflow-contrib/releases/download/'
+               'offside_models/')
 _DEFAULT_WEIGHTS = {
     'yolo32': ('yolo-football-pitch-detection.pt',
-               'https://huggingface.co/martinjolif/yolo-football-pitch-detection/'
-               'resolve/main/yolo-football-pitch-detection.pt'),
+               ['https://huggingface.co/martinjolif/yolo-football-pitch-detection/'
+                'resolve/main/yolo-football-pitch-detection.pt',
+                _MIRROR_URL + 'yolo-football-pitch-detection.pt']),
 }
 
 
