@@ -24,13 +24,13 @@ from .yolo3.utils import letterbox_image
 from .yolo3 import preprocessing
 
 class YOLO(ProcessorNode):
-    def __init__(self, model_path = None):
+    def __init__(self, model_path = None, **kwargs):
         self.model_path = model_path
         self.anchors_path = None
         self.classes_path = None
         self.score = 0.5
         self.iou = 0.5
-        super(YOLO, self).__init__()
+        super(YOLO, self).__init__(**kwargs)
 
     def open(self):
         # TODO: Figure out device_id later.

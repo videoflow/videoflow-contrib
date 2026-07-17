@@ -23,16 +23,16 @@ class DeepSort(OneTaskProcessorNode):
             If None, no budget is enforced.
     '''
     def __init__(self, min_height = 0, max_cosine_distance = 0.2,
-                nn_budget = None):
+                nn_budget = None, **kwargs):
         self._min_height = min_height
         self._max_cosine_distance = max_cosine_distance
         self._nn_budget = nn_budget
-        
+
         metric = NearestNeighborDistanceMetric(
             "cosine", self._max_cosine_distance, self._nn_budget
         )
         self._tracker = Tracker(metric)
-        super(DeepSort, self).__init__()
+        super(DeepSort, self).__init__(**kwargs)
     
     def process(self, bboxes):
         '''

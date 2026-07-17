@@ -21,10 +21,13 @@ class TracktorFromFrames(OneTaskProcessorNode):
     https://github.com/phil-bergmann/tracking_wo_bnw
     '''
 
-    def __init__(self, interpolate = False):
+    def __init__(self, interpolate = False, **kwargs):
         self._tracker = None
         self._interpolate = interpolate
-        super(TracktorFromFrames, self).__init__(device_type = 'gpu')
+        # device_type is fixed to gpu for this node; drop any captured by
+        # get_params() so reconstruction doesn't pass it twice.
+        kwargs.pop('device_type', None)
+        super(TracktorFromFrames, self).__init__(device_type = 'gpu', **kwargs)
     
     def _transform(self, pic):
         if pic.ndim == 2:
@@ -100,10 +103,13 @@ class TracktorFromFrames(OneTaskProcessorNode):
     
 
 class TracktorFromBoxes(OneTaskProcessorNode):
-    def __init__(self, interpolate = False):
+    def __init__(self, interpolate = False, **kwargs):
         self._tracker = None
         self._interpolate = interpolate
-        super(TracktorFromBoxes, self).__init__(device_type = 'gpu')
+        # device_type is fixed to gpu for this node; drop any captured by
+        # get_params() so reconstruction doesn't pass it twice.
+        kwargs.pop('device_type', None)
+        super(TracktorFromBoxes, self).__init__(device_type = 'gpu', **kwargs)
     
     def _transform_image(self, pic):
         if pic.ndim == 2:

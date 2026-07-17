@@ -58,8 +58,8 @@ class HumanPoseAnnotator(ProcessorNode):
         ("right_knee", "right_ankle", (255, 195, 77))
     ]
 
-    def __init__(self):
-        super(HumanPoseAnnotator, self).__init__()
+    def __init__(self, **kwargs):
+        super(HumanPoseAnnotator, self).__init__(**kwargs)
 
     def process(self, im: np.array, frame_keypoints: np.array):
         '''
@@ -126,7 +126,7 @@ class Detectron2HumanPose(ProcessorNode):
 
     def __init__(self, path_to_model_file = None, path_to_model_config = None,
                 architecture = 'R50_FPN_3x',
-                nb_tasks = 1, device_type = GPU):
+                nb_tasks = 1, device_type = GPU, **kwargs):
         self._path_to_model_file = path_to_model_file
         self._path_to_model_config = path_to_model_config
         self._architecture = architecture
@@ -141,7 +141,7 @@ class Detectron2HumanPose(ProcessorNode):
             self._remote_model_file_name = f'{architecture}.pkl'
         if path_to_model_file is not None and path_to_model_config is None:
             raise ValueError('path_to_model_config needs to be provided if path_to_model_file is provided')
-        super(Detectron2HumanPose, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(Detectron2HumanPose, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
 
     def open(self):
         cfg = get_cfg()

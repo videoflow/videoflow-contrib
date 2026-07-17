@@ -16,11 +16,16 @@ BASE_URL_DETECTION = 'https://github.com/videoflow/videoflow-contrib/releases/do
 
 class TfliteObjectDetector(ObjectDetector):
     def __init__(self, path_to_pb_file,
-                num_classes = 1):
+                num_classes = 1, min_score_threshold = 0.5, **kwargs):
         self._num_classes = num_classes
         self._path_to_pb_file = path_to_pb_file
+        self._min_score_threshold = min_score_threshold
         self._tflite_model = None
-        super(TfliteObjectDetector, self).__init__(nb_tasks = 1, device_type = CPU)
+        # nb_tasks/device_type are fixed for this node; drop any captured by
+        # get_params() so reconstruction doesn't pass them twice.
+        kwargs.pop('nb_tasks', None)
+        kwargs.pop('device_type', None)
+        super(TfliteObjectDetector, self).__init__(nb_tasks = 1, device_type = CPU, **kwargs)
     
     def open(self):
         '''
@@ -102,29 +107,34 @@ class TensorflowObjectDetector(ObjectDetector):
         "ssd-mobilenetv2_faces"
     ]
 
-    def __init__(self, 
+    def __init__(self,
                 num_classes = 90,
                 path_to_pb_file = None,
                 architecture = 'ssd-resnet50-fpn',
                 dataset = 'coco',
                 min_score_threshold = 0.5,
                 nb_tasks = 1,
-                device_type = GPU):
+                device_type = GPU,
+                **kwargs):
         self._tensorflow_model = None
         self._num_classes = num_classes
         self._path_to_pb_file = path_to_pb_file
-        
+        # Stored verbatim so the default ``get_params()`` can round-trip this node
+        # for reconstruction in a distributed worker process.
+        self._architecture = architecture
+        self._dataset = dataset
+
         if path_to_pb_file is None and (architecture is None or dataset is None):
             raise ValueError('If path_to_pb_file is None, then architecture and dataset cannot be None')
 
         if path_to_pb_file is None:
             remote_model_id = f'{architecture}_{dataset}'
             if remote_model_id not in self.supported_models:
-                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))        
+                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
             self._remote_model_file_name = f'{architecture}_{dataset}.pb'
 
         self._min_score_threshold = min_score_threshold
-        super(TensorflowObjectDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(TensorflowObjectDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
     
     def open(self):
         '''

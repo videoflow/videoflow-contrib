@@ -16,11 +16,13 @@ class MxnetPersonReid(ProcessorNode):
             for entries with similarity below threshold similarity.
     """
 
-    def __init__(self, min_similarity_threshold: float = 0.5, nb_tasks=1, device_type=GPU):
+    def __init__(self, min_similarity_threshold: float = 0.5, nb_tasks=1, device_type=GPU, **kwargs):
         self._context = mx.gpu() if device_type == GPU else mx.cpu()
-        self._similarity_threshold = min_similarity_threshold
+        # Stored under the constructor arg name so the default ``get_params()`` can
+        # round-trip this node for reconstruction in a distributed worker process.
+        self._min_similarity_threshold = min_similarity_threshold
         self._features = None
-        super().__init__(nb_tasks=nb_tasks, device_type=device_type)
+        super().__init__(nb_tasks=nb_tasks, device_type=device_type, **kwargs)
 
     def process(self, features: np.array) -> np.array:
         """Returns persons ids based on features matrix for several persons.
@@ -43,7 +45,7 @@ class MxnetPersonReid(ProcessorNode):
         result = np.empty((features.shape[0], ), int)
         for i in range(features.shape[0]):
             person_id: int = dist_all[i].argsort(is_ascend=False).as_in_context(mx.cpu()).asnumpy().astype("int32")[0]
-            if dist_all[i][person_id] < self._similarity_threshold:
+            if dist_all[i][person_id] < self._min_similarity_threshold:
                 self._features = mx.nd.concat(self._features, features, dim=0)
                 result[i] = self._features.shape[0] - 1
             else:

@@ -98,28 +98,33 @@ class TensorflowSegmenter(Segmenter):
         "maskrcnn-inceptionv2_coco"
     ]
 
-    def __init__(self, 
+    def __init__(self,
                 num_classes = 90,
                 path_to_pb_file = None,
                 architecture = 'maskrcnn-inceptionv2',
                 dataset = 'coco',
                 min_score_threshold = 0.5,
                 nb_tasks = 1,
-                device_type = GPU):
+                device_type = GPU,
+                **kwargs):
         self._num_classes = num_classes
         self._path_to_pb_file = path_to_pb_file
-        
+        # Stored verbatim so the default ``get_params()`` can round-trip this node
+        # for reconstruction in a distributed worker process.
+        self._architecture = architecture
+        self._dataset = dataset
+
         if path_to_pb_file is None and (architecture is None or dataset is None):
             raise ValueError('If path_to_pb_file is None, then architecture and dataset cannot be None')
 
         if path_to_pb_file is None:
             remote_model_id = f'{architecture}_{dataset}'
             if remote_model_id not in self.supported_models:
-                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))        
+                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
             self._remote_model_file_name = f'{architecture}_{dataset}.pb'
 
         self._min_score_threshold = min_score_threshold
-        super(TensorflowSegmenter, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(TensorflowSegmenter, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
     
     def open(self):
         '''

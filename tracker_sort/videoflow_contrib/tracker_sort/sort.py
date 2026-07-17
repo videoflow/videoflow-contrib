@@ -193,13 +193,13 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
             If for some reason an original det does not have a corresponding track, the track index is -1
     '''
     
-    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', metric_function_threshold = None, show_in_between = True, return_original_dets = False):
+    def __init__(self, max_age = 7, min_hits = 3, metric_function_type = 'iou', metric_function_threshold = None, show_in_between = True, return_original_dets = False, **kwargs):
         self.max_age = max_age
         self.min_hits = min_hits
         self.trackers = []
         self.frame_count = 0
         self.metric_function_type = metric_function_type
-        
+
         if metric_function_threshold is None:
             if self.metric_function_type == 'iou':
                 self.metric_function_threshold = 0.3
@@ -213,7 +213,7 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         self.return_original_dets = return_original_dets
         self.show_in_between = show_in_between
         self.metric_function = metric_factory(metric_function_type)
-        super(KalmanFilterBoundingBoxTracker, self).__init__()
+        super(KalmanFilterBoundingBoxTracker, self).__init__(**kwargs)
 
     def _track(self, dets, fid = None):
         """

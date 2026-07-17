@@ -23,18 +23,21 @@ class MxnetObjectDetector(ObjectDetector):
                  min_score_threshold: float = 0.5,
                  nb_tasks: int = 1,
                  device_type: str = GPU,
+                 **kwargs,
                  ):
         if architecture not in self.AVAILABLE_ARCHITECTURES:
             raise NotImplementedError(f"{architecture} model is not supported!")
 
-        self._mxnet_model_name = architecture
+        # Stored under the constructor arg name so the default ``get_params()`` can
+        # round-trip this node for reconstruction in a distributed worker process.
+        self._architecture = architecture
         self._min_score_threshold = min_score_threshold
         self._ctx = mx.gpu() if device_type == GPU else mx.cpu()
         self._mxnet_model = None
-        super().__init__(nb_tasks=nb_tasks, device_type=device_type)
+        super().__init__(nb_tasks=nb_tasks, device_type=device_type, **kwargs)
 
     def open(self):
-        self._mxnet_model = gcv.model_zoo.get_model(self._mxnet_model_name, pretrained=True, ctx=self._ctx)
+        self._mxnet_model = gcv.model_zoo.get_model(self._architecture, pretrained=True, ctx=self._ctx)
 
     def _detect(self, im: np.array) -> np.array:
         im_t = mx.nd.array(cv2.cvtColor(im, cv2.COLOR_BGR2RGB)).astype('uint8')

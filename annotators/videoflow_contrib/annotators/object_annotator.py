@@ -24,12 +24,13 @@ class ObjectAnnotator(ProcessorNode):
                  box_thickness=2,
                  text_color=(255, 255, 0),
                  nb_tasks=1,
+                 **kwargs,
                  ):
         self._class_labels = class_labels
         self._box_color = box_color
         self._text_color = text_color
         self._box_thickness = box_thickness
-        super().__init__(nb_tasks=nb_tasks)
+        super().__init__(nb_tasks=nb_tasks, **kwargs)
 
     def _annotate(self,
                   im: np.array,

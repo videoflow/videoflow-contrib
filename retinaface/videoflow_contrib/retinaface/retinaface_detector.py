@@ -16,11 +16,11 @@ class RetinafaceDetector(ProcessorNode):
     '''
 
     '''
-    def __init__(self, nb_tasks = 1, device_type = GPU):
+    def __init__(self, nb_tasks = 1, device_type = GPU, **kwargs):
         self._scales = [1024, 1980]
         self._thresh = 0.8
         self._detector = None
-        super(RetinafaceDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(RetinafaceDetector, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
     
     def open(self):
         remote_params_url = BASE_URL_RETINAFACE + 'R50-0000.params'

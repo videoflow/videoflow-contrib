@@ -34,11 +34,11 @@ class HumanEncoder(ProcessorNode):
     
     https://github.com/nwojke/cosine_metric_learning
     '''
-    def __init__(self, path_to_pb_file = None, batch_size = 32, nb_tasks = 1, device_type = GPU):
+    def __init__(self, path_to_pb_file = None, batch_size = 32, nb_tasks = 1, device_type = GPU, **kwargs):
         self._tensorflow_model = None
         self._path_to_pb_file = path_to_pb_file
         self._batch_size = batch_size
-        super(HumanEncoder, self).__init__(nb_tasks = nb_tasks, device_type = device_type)
+        super(HumanEncoder, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
     
     def open(self):
         '''

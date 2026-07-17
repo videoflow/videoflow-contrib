@@ -20,13 +20,20 @@ See the [Tensorflow Object detection](detector_tf) sub-package for an example of
 Consumers, producers and processors from the Videoflow-contrib library are used
 in the same way as the components within Videoflow itself.
 
+Videoflow now runs every node as its own worker process wired together through a
+message broker (locally via `LocalProcessEngine`, in production on Kubernetes). A
+flow is described by a `build_flow()` function that returns a `Flow` built from its
+consumer (sink) nodes — producers are discovered automatically by walking the graph
+backwards. Give each node a stable `name=` so it can be addressed across processes,
+and store/forward `**kwargs` on any custom node so it can be reconstructed inside a
+worker.
+
 ```python
 import videoflow
-import videoflow.core.flow as flow
+from videoflow.core import Flow
 from videoflow.core.constants import BATCH
 from videoflow.consumers import VideofileWriter
 from videoflow.producers import VideofileReader
-from videoflow_contrib.detector_tf import TensorflowObjectDetector
 from videoflow.processors.vision.annotators import BoundingBoxAnnotator
 from videoflow.utils.downloader import get_file
 
@@ -35,30 +42,33 @@ VIDEO_NAME = 'intersection.mp4'
 URL_VIDEO = BASE_URL_EXAMPLES + VIDEO_NAME
 
 class FrameIndexSplitter(videoflow.core.node.ProcessorNode):
-    def __init__(self):
-        super(FrameIndexSplitter, self).__init__()
-    
+    def __init__(self, **kwargs):
+        super(FrameIndexSplitter, self).__init__(**kwargs)
+
     def process(self, data):
         index, frame = data
         return frame
 
-def main():
-    input_file = get_file(
-        VIDEO_NAME, 
-        URL_VIDEO)
+def build_flow():
+    from videoflow_contrib.detector_tf import TensorflowObjectDetector
+    input_file = get_file(VIDEO_NAME, URL_VIDEO)
     output_file = "output.avi"
-    reader = VideofileReader(input_file)
-    frame = FrameIndexSplitter()(reader)
-    detector = TensorflowObjectDetector()(frame)
-    annotator = BoundingBoxAnnotator()(frame, detector)
-    writer = VideofileWriter(output_file, fps = 30)(annotator)
-    fl = flow.Flow([reader], [writer], flow_type = BATCH)
-    fl.run()
-    fl.join()
+    reader = VideofileReader(input_file, name = 'reader')
+    frame = FrameIndexSplitter(name = 'frame')(reader)
+    detector = TensorflowObjectDetector(name = 'detector')(frame)
+    annotator = BoundingBoxAnnotator(name = 'annotator')(frame, detector)
+    writer = VideofileWriter(output_file, fps = 30, name = 'writer')(annotator)
+    return Flow([writer], flow_type = BATCH)
 
 if __name__ == "__main__":
-    main()
+    # Local run (needs a NATS server): one subprocess per node, talking to NATS.
+    from videoflow.engines.local import LocalProcessEngine
+    flow = build_flow()
+    flow.run(LocalProcessEngine())
+    flow.join()
 
+# Deploy to Kubernetes (one workload per node) with the videoflow CLI:
+#   videoflow deploy my_flow.py:build_flow --nats nats://nats:4222 --image <your-image>
 ```
 
 

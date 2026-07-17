@@ -20,12 +20,12 @@ class MxnetPersonFeatureExtractor(ProcessorNode):
 
     FEATURE_VECTOR_LEN = 2048
 
-    def __init__(self, path_to_params_file: str, nb_tasks=1, device_type=GPU):
+    def __init__(self, path_to_params_file: str, nb_tasks=1, device_type=GPU, **kwargs):
         self._mxnet_model = None
         self._transform = None
         self._context = mx.gpu() if device_type == GPU else mx.cpu()
         self._path_to_params_file = path_to_params_file
-        super().__init__(nb_tasks=nb_tasks, device_type=device_type)
+        super().__init__(nb_tasks=nb_tasks, device_type=device_type, **kwargs)
 
     def open(self):
         self._transform = get_transform()
