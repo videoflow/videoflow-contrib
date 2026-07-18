@@ -32,6 +32,9 @@ RUN uv pip install --system --break-system-packages --no-cache --no-deps \
         /src/multiview_fuser /src/offside_engine /src/offside_visualizer
 
 # 3. The solution modules.
-COPY solutions/offside/offside.py solutions/offside/offside_nodes.py solutions/offside/common.py ./
+COPY solutions/offside/offside.py solutions/offside/offside_nodes.py \
+     solutions/offside/common.py solutions/offside/prepare.py \
+     solutions/offside/sync_offsets.py solutions/offside/calibrate.py \
+     solutions/offside/fit_teams.py solutions/offside/download_weights.py ./
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

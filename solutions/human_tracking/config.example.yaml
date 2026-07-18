@@ -1,0 +1,37 @@
+# Human-tracking config. Copy to config.yaml and edit, or let
+# `videoflow deploy human_tracking.py` generate one by asking for the values.
+# Relative paths resolve against THIS file's directory.
+
+# Where outputs go. Mounted into the pods, so the annotated video lands here.
+work_dir: ./out
+
+# The video to process. Leave empty (or omit) to use the bundled sample clip
+# (people_walking.mp4), which prepare.py downloads into work_dir. It lives in
+# work_dir rather than the shared model cache because this path is baked into the
+# reader's parameters at compile time and must resolve to the same absolute
+# location inside the worker pods -- work_dir is mounted at an identical path.
+input_video: ''
+
+# Output filename, written inside work_dir. The default VideofileWriter codec
+# pairs with a .avi container.
+output_video: annotated_video.avi
+
+# 'cpu' or 'gpu' — sets device_type on the pose and encoder nodes. 'gpu' requires
+# the GPU image (gpu.Dockerfile) and a GPU node in the cluster. The pose model is
+# by far the heaviest stage; CPU works but is slow.
+device: cpu
+
+# 'batch' for recorded files: loss-free, backpressured, runs to completion.
+# 'realtime' only for a genuine live source (frames may be dropped to stay fresh).
+flow_type: batch
+
+pose:
+  architecture: R50_FPN_3x     # Detectron2 keypoint model; R50_FPN_3x is the balanced default
+
+encoder:
+  batch_size: 32               # crops encoded per forward pass; lower it if VRAM is tight
+
+tracker:
+  min_height: 0                # ignore detections shorter than this many px (0 = keep all)
+  max_cosine_distance: 0.2     # appearance-match threshold; lower = stricter re-identification
+  nn_budget: null              # max appearance samples kept per identity (null = unbounded)

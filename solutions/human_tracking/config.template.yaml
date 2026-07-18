@@ -1,0 +1,50 @@
+# Human-tracking config template. `videoflow deploy human_tracking.py` reads this
+# when no config.yaml exists: it asks the x-questions below, writes config.yaml,
+# and hostPath-mounts the x-mounts paths into the prep container and the worker
+# pods. See config.example.yaml for what every knob means.
+work_dir: ./out
+input_video: ''
+output_video: annotated_video.avi
+device: cpu
+flow_type: batch
+pose:
+  architecture: R50_FPN_3x
+encoder:
+  batch_size: 32
+tracker:
+  min_height: 0
+  max_cosine_distance: 0.2
+  nn_budget: null
+
+# Inputs `videoflow deploy` asks for when generating config.yaml. input_video is
+# deliberately absent: leaving it empty uses the bundled sample clip, and a user
+# with their own footage sets it in config.yaml (and adds a --mount for it).
+x-questions:
+  - key: device
+    prompt: 'Run the pose and encoder models on'
+    type: choice
+    choices: [cpu, gpu]
+    default: cpu
+  - key: pose.architecture
+    prompt: 'Detectron2 keypoint model'
+    type: choice
+    choices: [R50_FPN_3x, R50_FPN_1x, R101_FPN_3x, X101_FPN_3x]
+    default: R50_FPN_3x
+  - key: tracker.max_cosine_distance
+    prompt: 'Appearance-match threshold (lower = stricter re-identification)'
+    type: float
+    default: 0.2
+  - key: flow_type
+    prompt: 'Flow type (batch = recorded file, realtime = live source)'
+    type: choice
+    choices: [batch, realtime]
+    default: batch
+
+# Paths that must be visible inside prep containers and worker pods: the work dir
+# at the same absolute location (it holds the input clip and the output video),
+# plus the operator's model-weight caches mapped onto the container root's -- the
+# components resolve those at runtime via ~, which is /root inside the pod.
+x-mounts:
+  - '{work_dir}'
+  - '~/.videoflow:/root/.videoflow'
+  - '~/.torch:/root/.torch'

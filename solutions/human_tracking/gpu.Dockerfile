@@ -2,15 +2,15 @@
 #
 # GPU variant (Python 3.12 + CUDA 12.4). Builds on videoflow-base:py3.12-cuda (a CUDA
 # -devel image, so nvcc is present to compile detectron2's CUDA kernels). The pose
-# (detectron2/PyTorch) and encoder (tensorflow[and-cuda]) nodes run on the GPU; deepsort
-# is CPU. Schedule the GPU nodes' pods onto GPU hosts (nvidia.com/gpu + NVIDIA runtime).
+# (detectron2/PyTorch) and encoder (tensorflow[and-cuda]) nodes run on the GPU when the
+# config sets `device: gpu`; deepsort is always CPU. Deploy schedules the GPU nodes'
+# pods onto GPU hosts (nvidia.com/gpu + NVIDIA runtime).
 #
 # Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
 #   docker build -f solutions/human_tracking/gpu.Dockerfile -t videoflow-contrib-human-tracking:gpu .
 #
-# Deploy:
-#   videoflow deploy human_tracking.py:build_flow --nats nats://... \
-#       --image videoflow-contrib-human-tracking:gpu
+# Normally built for you: `videoflow deploy human_tracking.py` picks this file
+# when the local docker daemon has the NVIDIA runtime.
 ARG BASE_IMAGE=videoflow-base:py3.12-cuda
 FROM ${BASE_IMAGE}
 
@@ -42,7 +42,11 @@ COPY humanencoder /src/humanencoder
 RUN uv pip install --system --break-system-packages --no-cache --no-deps \
         /src/detectron2 /src/tracker_deepsort /src/humanencoder
 
-# 5. The solution graph module, importable as `human_tracking`.
-COPY solutions/human_tracking/human_tracking.py ./
+# 5. The solution modules: the graph, the importable glue nodes the worker
+#    reconstructs, the config loader, and the prep hook deploy runs.
+COPY solutions/human_tracking/human_tracking.py \
+     solutions/human_tracking/human_tracking_nodes.py \
+     solutions/human_tracking/common.py \
+     solutions/human_tracking/prepare.py ./
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

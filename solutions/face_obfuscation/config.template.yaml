@@ -1,0 +1,54 @@
+# Face-obfuscation config template. `videoflow deploy face_obfuscation.py` reads
+# this when no config.yaml exists: it asks the x-questions below, writes
+# config.yaml, and hostPath-mounts the x-mounts paths into the prep container and
+# the worker pods. See config.example.yaml for what every knob means.
+work_dir: ./out
+input_video: null
+output_video: blurred_video.avi
+fps: 30
+device: cpu
+flow_type: batch
+detector:
+  architecture: ssd-mobilenetv2
+  dataset: faces
+  num_classes: 1
+  min_score_threshold: 0.2
+tracker:
+  max_age: 12
+  min_hits: 0
+blur:
+  expand: 0.20
+  kernel: 23
+  sigma: 30
+
+# Inputs `videoflow deploy` asks for when generating config.yaml.
+x-questions:
+  - key: input_video
+    prompt: 'Path to the video whose faces should be blurred'
+    type: path
+  - key: detector.min_score_threshold
+    prompt: 'Face detection threshold (lower catches more faces and more false positives)'
+    type: float
+    default: 0.2
+  - key: blur.sigma
+    prompt: 'Blur strength (Gaussian sigma; higher is blurrier)'
+    type: float
+    default: 30.0
+  - key: device
+    prompt: 'Run the detector on'
+    type: choice
+    choices: [cpu, gpu]
+    default: cpu
+  - key: flow_type
+    prompt: 'Flow type (batch = recorded file, realtime = live source)'
+    type: choice
+    choices: [batch, realtime]
+    default: batch
+
+# Paths that must be visible inside prep containers and worker pods: the input
+# video (read-only) and the work dir at the same absolute location, plus the
+# operator's model-weight cache mapped onto the container root's.
+x-mounts:
+  - '{input_video}:ro'
+  - '{work_dir}'
+  - '~/.videoflow:/root/.videoflow'

@@ -16,6 +16,7 @@ directory on PYTHONPATH so the worker subprocesses can import that module.
 from __future__ import annotations
 
 import argparse
+import os
 
 from common import load_config
 from offside_nodes import BallPick, FeaturePacker, FrameIndexSplitter, PersonBoxes, WorldStateJsonlWriter
@@ -24,7 +25,8 @@ from videoflow.core.constants import GPU
 
 def build_flow(cfg=None):
     if cfg is None:
-        cfg = load_config('config.yaml')
+        # Module-dir-relative so `videoflow deploy` works from any cwd.
+        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
     from videoflow.core import Flow
     from videoflow.core.constants import BATCH, REALTIME
     from videoflow.core.policies import JoinPolicy
@@ -76,7 +78,6 @@ def build_flow(cfg=None):
     verdicts = OffsideEngine(pitch_length=cfg.pitch_length, pitch_width=cfg.pitch_width,
                              attack_direction=cfg.attack_direction, ref_fps=ref_fps,
                              name='engine')(fuser)
-    import os
     results_dir = os.path.join(cfg.work_dir, 'results')
     os.makedirs(results_dir, exist_ok=True)
     viz = OffsideVisualizer(output_dir=results_dir,
@@ -96,8 +97,6 @@ def build_flow(cfg=None):
 
 
 def main():
-    import os
-
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', default='config.yaml')
     ap.add_argument('--flow-type', choices=('batch', 'realtime'), default=None,

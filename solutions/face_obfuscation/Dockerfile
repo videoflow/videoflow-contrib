@@ -2,18 +2,17 @@
 #
 # This solution's graph (face_obfuscation.py:build_flow) wires together nodes from
 # videoflow_contrib.detector_tf (TensorFlow) and videoflow_contrib.tracker_sort, plus
-# a couple of local nodes defined in the script itself. All node classes must be
-# importable in the worker, so this image installs both sub-packages AND the script
-# module (importable as `face_obfuscation`, which is how its local nodes appear in
-# VF_NODE_CLASS). Python 3.12.
+# the glue nodes in face_obfuscation_nodes.py. All node classes must be importable in
+# the worker, so this image installs both sub-packages AND the solution modules
+# (glue nodes appear in VF_NODE_CLASS as `face_obfuscation_nodes.<Class>`). Python 3.12.
 #
 # Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
 #   docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-contrib-face-obfuscation:latest .
 # A GPU build is available: docker build -f solutions/face_obfuscation/gpu.Dockerfile -t videoflow-contrib-face-obfuscation:gpu .
 #
-# Deploy (input path comes from VF_INPUT_VIDEO at runtime):
-#   videoflow deploy face_obfuscation.py:build_flow --nats nats://... \
-#       --image videoflow-contrib-face-obfuscation:latest
+# Normally you don't build this by hand — `videoflow deploy face_obfuscation.py`
+# builds it (picking gpu.Dockerfile when a GPU is available), loads it into the
+# cluster, and runs the flow. See solutions/face_obfuscation/README.md.
 ARG BASE_IMAGE=videoflow-base:py3.12
 FROM ${BASE_IMAGE}
 
@@ -29,8 +28,11 @@ COPY detector_tf /src/detector_tf
 COPY tracker_sort /src/tracker_sort
 RUN uv pip install --system --no-cache --no-deps /src/detector_tf /src/tracker_sort
 
-# The solution graph module, importable as `face_obfuscation` so the worker can build
-# its local node classes (FrameIndexSplitter, BoundingboxObfuscator).
-COPY solutions/face_obfuscation/face_obfuscation.py ./
+# The solution modules: the graph, the importable glue nodes the worker
+# reconstructs, the config loader, and the prep hook deploy runs.
+COPY solutions/face_obfuscation/face_obfuscation.py \
+     solutions/face_obfuscation/face_obfuscation_nodes.py \
+     solutions/face_obfuscation/common.py \
+     solutions/face_obfuscation/prepare.py ./
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

@@ -1,0 +1,39 @@
+# Face-obfuscation config. Copy to config.yaml and edit, or let
+# `videoflow deploy face_obfuscation.py` generate one by asking for the values.
+# Relative paths resolve against THIS file's directory.
+
+# Where outputs go. Mounted into the pods, so the blurred video lands here.
+work_dir: ./out
+
+# The video to obfuscate (required).
+input_video: /data/video.mp4
+
+# Output filename, written inside work_dir. Must end in .avi — videoflow's
+# VideofileWriter only supports that container.
+output_video: blurred_video.avi
+
+# Frames per second of the written video. Match your source footage.
+fps: 30
+
+# 'cpu' or 'gpu' — sets device_type on the detector node. 'gpu' requires the GPU
+# image (gpu.Dockerfile) and a GPU node in the cluster.
+device: cpu
+
+# 'batch' for recorded files: loss-free, backpressured, runs to completion.
+# 'realtime' only for a genuine live source (frames may be dropped to stay fresh).
+flow_type: batch
+
+detector:
+  architecture: ssd-mobilenetv2   # with dataset 'faces' → the face SSD checkpoint
+  dataset: faces
+  num_classes: 1
+  min_score_threshold: 0.2        # lower catches more faces (and more false blurs)
+
+tracker:
+  max_age: 12                     # frames a face stays blurred after the detector loses it
+  min_hits: 0                     # detections before a track is emitted; 0 blurs immediately
+
+blur:
+  expand: 0.20                    # grow each box 20% per side so hair/chin are covered
+  kernel: 23                      # Gaussian kernel size in px (odd); larger = blurrier
+  sigma: 30                       # Gaussian sigma; larger = blurrier

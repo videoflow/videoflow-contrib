@@ -1,0 +1,62 @@
+# Offside solution config template. `videoflow deploy offside.py` reads this when
+# no config.yaml exists: it asks the x-questions below interactively, writes
+# config.yaml, and hostPath-mounts the x-mounts paths into the prep container and
+# the worker pods. See config.example.yaml for full documentation of every knob.
+work_dir: ./out
+flow_type: batch
+cameras: {}
+pitch:
+  length: 105.0
+  width: 68.0
+attack_direction: auto
+team_names: {0: Reds, 1: Blues}
+trim: {start_s: null, end_s: null}
+detector:
+  checkpoint: null
+  resolution: 1288
+  conf_ball: 0.15
+  tile_inference: false
+fusion:
+  ref_fps: 30.0
+  quorum: 2
+debug_overlays: false
+
+# Inputs `videoflow deploy` asks for when generating config.yaml (stripped from
+# the generated file).
+x-questions:
+  - key: cameras
+    prompt: 'Video file per camera, in order (first = audio-sync reference), comma-separated'
+    type: paths
+    item_key: 'cam{i}'
+    item_value: {video: '{path}'}
+  - key: pitch.length
+    prompt: 'Pitch length in metres (measure it; FIFA standard 105)'
+    type: float
+    default: 105.0
+  - key: pitch.width
+    prompt: 'Pitch width in metres (FIFA standard 68)'
+    type: float
+    default: 68.0
+  - key: team_names.0
+    prompt: 'Name of team 0'
+    type: str
+    default: Reds
+  - key: team_names.1
+    prompt: 'Name of team 1'
+    type: str
+    default: Blues
+  - key: flow_type
+    prompt: 'Flow type (batch = recorded clips, realtime = live source)'
+    type: choice
+    choices: [batch, realtime]
+    default: batch
+
+# Paths (from the resolved config) that must be visible inside prep containers
+# and worker pods: the camera videos (read-only) and the work dir (prep artifacts
+# in, results out) at the same absolute location, plus the operator's model-weight
+# caches mapped onto the container root's (containers run as root).
+x-mounts:
+  - '{cameras.*.video}:ro'
+  - '{work_dir}'
+  - '~/.videoflow:/root/.videoflow'
+  - '~/.cache:/root/.cache'

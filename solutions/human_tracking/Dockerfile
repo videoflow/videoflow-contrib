@@ -2,17 +2,18 @@
 #
 # This solution's graph (human_tracking.py:build_flow) wires together nodes from
 # videoflow_contrib.detectron2 (PyTorch), videoflow_contrib.tracker_deepsort and
-# videoflow_contrib.humanencoder (TensorFlow), plus several local nodes defined in the
-# script. All node classes must be importable in the worker, so this image installs the
-# three sub-packages AND the script module (importable as `human_tracking`). Python 3.12.
+# videoflow_contrib.humanencoder (TensorFlow), plus the glue nodes in
+# human_tracking_nodes.py. All node classes must be importable in the worker, so this
+# image installs the three sub-packages AND the solution modules (glue nodes appear in
+# VF_NODE_CLASS as `human_tracking_nodes.<Class>`). Python 3.12.
 #
 # Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
 #   docker build -f solutions/human_tracking/Dockerfile -t videoflow-contrib-human-tracking:latest .
 # A GPU build is available: docker build -f solutions/human_tracking/gpu.Dockerfile -t videoflow-contrib-human-tracking:gpu .
 #
-# Deploy:
-#   videoflow deploy human_tracking.py:build_flow --nats nats://... \
-#       --image videoflow-contrib-human-tracking:latest
+# Normally you don't build this by hand — `videoflow deploy human_tracking.py`
+# builds it (picking gpu.Dockerfile when a GPU is available), loads it into the
+# cluster, and runs the flow. See solutions/human_tracking/README.md.
 ARG BASE_IMAGE=videoflow-base:py3.12
 FROM ${BASE_IMAGE}
 
@@ -43,8 +44,11 @@ COPY humanencoder /src/humanencoder
 RUN uv pip install --system --no-cache --no-deps \
         /src/detectron2 /src/tracker_deepsort /src/humanencoder
 
-# 5. The solution graph module, importable as `human_tracking` so the worker can build
-#    its local node classes (FrameIndexSplitter, KeypointsExtractor, ...).
-COPY solutions/human_tracking/human_tracking.py ./
+# 5. The solution modules: the graph, the importable glue nodes the worker
+#    reconstructs, the config loader, and the prep hook deploy runs.
+COPY solutions/human_tracking/human_tracking.py \
+     solutions/human_tracking/human_tracking_nodes.py \
+     solutions/human_tracking/common.py \
+     solutions/human_tracking/prepare.py ./
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

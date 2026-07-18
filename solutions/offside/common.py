@@ -70,12 +70,16 @@ class Config:
 def load_config(path: str) -> Config:
     with open(path) as f:
         raw = yaml.safe_load(f)
+    # Relative paths resolve against the config file's directory (not the process
+    # cwd), so every consumer — prep scripts, local runs, `videoflow deploy`
+    # compiling from any cwd — bakes the same absolute paths.
+    cfg_dir = os.path.dirname(os.path.abspath(path))
     cams_raw = raw['cameras']
     cameras = list(cams_raw.keys())
-    videos = {c: cams_raw[c]['video'] for c in cameras}
+    videos = {c: os.path.join(cfg_dir, cams_raw[c]['video']) for c in cameras}
     pitch = raw.get('pitch', {})
     trim = raw.get('trim', {})
-    work_dir = os.path.abspath(raw.get('work_dir', './out'))
+    work_dir = os.path.abspath(os.path.join(cfg_dir, raw.get('work_dir', './out')))
     os.makedirs(work_dir, exist_ok=True)
     flow_type = str(raw.get('flow_type', 'batch')).lower()
     if flow_type not in ('batch', 'realtime'):

@@ -1,146 +1,103 @@
 '''
-Detects human poses, encodes each person, tracks them with DeepSort and writes an
-annotated copy of a sample video to annotated_video.avi.
+Human tracking — pose estimation, appearance encoding and re-identification.
 
-Local run (needs a NATS server):
+Per frame: read → Detectron2 human pose → split keypoints/boxes → annotate the
+skeletons; crop each person, encode their appearance, and feed boxes+features to
+DeepSort so identities survive occlusion → annotate track ids → write the video.
 
-    python human_tracking.py
+Deploy to Kubernetes (config Q&A, image build, broker, run and teardown in one
+command — see README.md):
 
-Deploy to Kubernetes:
+    videoflow deploy human_tracking.py
 
-    videoflow deploy human_tracking.py:build_flow --nats nats://nats:4222 --image <your-image>
+Local run, all workers as subprocesses on this machine:
+
+    python human_tracking.py --config config.yaml
+
+The glue nodes live in ``human_tracking_nodes.py`` (a real importable module) so
+distributed workers can reconstruct them by class path; ``main`` puts this
+directory on PYTHONPATH so the worker subprocesses can import that module.
 '''
-import numpy as np
-import videoflow
+from __future__ import annotations
+
+import argparse
+import os
+
+from common import load_config
+from human_tracking_nodes import (
+    AppendFeaturesToBoundingBoxes,
+    BoundingBoxesExtractor,
+    ConvertTracksForAnotation,
+    CropBoundingBoxes,
+    FrameIndexSplitter,
+    KeypointsExtractor,
+)
 from videoflow.consumers import VideofileWriter
 from videoflow.core import Flow
-from videoflow.core.constants import BATCH
 from videoflow.processors.vision.annotators import TrackerAnnotator
 from videoflow.producers import VideofileReader
-from videoflow.utils.downloader import get_file
 
-BASE_URL_EXAMPLES = "https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/"
-VIDEO_NAME = "people_walking.mp4"
-URL_VIDEO = BASE_URL_EXAMPLES + VIDEO_NAME
 
-class FrameIndexSplitter(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(FrameIndexSplitter, self).__init__(**kwargs)
-
-    def process(self, data):
-        index, frame = data
-        return frame
-
-class KeypointsExtractor(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(KeypointsExtractor, self).__init__(**kwargs)
-
-    def process(self, data):
-        keypoints, bounding_boxes = data
-        return keypoints
-
-class BoundingBoxesExtractor(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(BoundingBoxesExtractor, self).__init__(**kwargs)
-
-    def process(self, data):
-        '''
-        Returns:
-            - bounding_boxes: (nb_boxes, [ymin, xmin, width, height, klass, score])
-        '''
-        keypoints, bounding_boxes = data
-        scores = np.ones((bounding_boxes.shape[0], 1))
-        bounding_boxes = np.concatenate(
-            [bounding_boxes[:, [1, 0]],
-            np.expand_dims(bounding_boxes[:,2] - bounding_boxes[:,0], 1),
-            np.expand_dims(bounding_boxes[:,3] - bounding_boxes[:,1], 1)], axis = 1)
-        bounding_boxes = np.concatenate([bounding_boxes, scores], axis = 1)
-        bounding_boxes = bounding_boxes.astype(np.int32)
-        return bounding_boxes
-
-class CropBoundingBoxes(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(CropBoundingBoxes, self).__init__(**kwargs)
-
-    def process(self, im, bounding_boxes):
-        '''
-        - Arguments:
-            - im: np.array of shape (h, w, 3)
-            - bounding_boxes: np.array of shape (nb_boxes, [ymin, xmin, ymax, xmax, score])
-
-        - Returns:
-            - im_list: list of np.array (h, w, 3)
-        '''
-        to_return = []
-        for bbox in bounding_boxes:
-            ymin, xmin, width, height, _= bbox
-            crop = im[ymin:ymin + height, xmin:xmin + width, :]
-            to_return.append(crop)
-        return to_return
-
-class AppendFeaturesToBoundingBoxes(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(AppendFeaturesToBoundingBoxes, self).__init__(**kwargs)
-
-    def process(self, bboxes, features):
-        '''
-        - Arguments:
-            - bboxes: (batch, [ymin, xmin, width, height, score])
-            - features: (batch, nb_features)
-        '''
-        to_return = np.concatenate([bboxes, features], axis = 1)
-        return to_return
-
-class ConvertTracksForAnotation(videoflow.core.node.ProcessorNode):
-    def __init__(self, **kwargs):
-        super(ConvertTracksForAnotation, self).__init__(**kwargs)
-
-    def process(self, tracks):
-        '''
-        - Arguments:
-            - tracks: (nb_tracks, [ymin, xmin, width, height, track_id])
-
-        - Returns:
-            - tracks: (nb_tracks, [ymin, xmin, ymax, xmax, track_id])
-        '''
-
-        if len(tracks) > 0:
-            to_return = np.concatenate(
-                [
-                    tracks[:, [0, 1]],
-                    tracks[:, 0] + tracks[:, 3],
-                    tracks[:, 1] + tracks[:, 2],
-                    tracks[:, 4]
-                ],
-                axis = 1
-            ).astype(np.int32)
-            return to_return
-        else:
-            return tracks
-
-def build_flow():
+def build_flow(cfg=None):
+    if cfg is None:
+        # Module-dir-relative so `videoflow deploy` works from any cwd.
+        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
     from videoflow_contrib.detectron2 import Detectron2HumanPose, HumanPoseAnnotator
     from videoflow_contrib.humanencoder import HumanEncoder
     from videoflow_contrib.tracker_deepsort import DeepSort
-    input_file_path = get_file(VIDEO_NAME, URL_VIDEO)
-    output_file = 'annotated_video.avi'
-    reader = VideofileReader(input_file_path, name = 'reader')
-    frame = FrameIndexSplitter(name = 'frame')(reader)
-    results = Detectron2HumanPose(architecture = 'R50_FPN_3x', device_type = 'cpu', name = 'pose')(frame)
-    keypoints = KeypointsExtractor(name = 'keypoints')(results)
-    bounding_boxes = BoundingBoxesExtractor(name = 'bounding-boxes')(results)
-    anotated_keypoints = HumanPoseAnnotator(name = 'pose-annotator')(frame, keypoints)
-    cropped_humans = CropBoundingBoxes(name = 'crop')(frame, bounding_boxes)
-    human_features = HumanEncoder(name = 'encoder')(cropped_humans)
-    tracker_input = AppendFeaturesToBoundingBoxes(name = 'append-features')(bounding_boxes, human_features)
-    tracks = DeepSort(name = 'tracker')(tracker_input)
-    tracks_anotator_input = ConvertTracksForAnotation(name = 'convert-tracks')(tracks)
-    anotated_tracks = TrackerAnnotator(name = 'track-annotator')(anotated_keypoints, tracks_anotator_input)
-    writer = VideofileWriter(output_file, name = 'writer')(anotated_tracks)
-    return Flow([writer], flow_type = BATCH)
+
+    pose_cfg = cfg.pose
+    enc = cfg.encoder
+    trk = cfg.tracker
+
+    reader = VideofileReader(cfg.resolve_input(), name='reader')
+    frame = FrameIndexSplitter(name='frame')(reader)
+    results = Detectron2HumanPose(
+        architecture=pose_cfg.get('architecture', 'R50_FPN_3x'),
+        device_type=cfg.device,
+        name='pose')(frame)
+    keypoints = KeypointsExtractor(name='keypoints')(results)
+    bounding_boxes = BoundingBoxesExtractor(name='bounding-boxes')(results)
+    anotated_keypoints = HumanPoseAnnotator(name='pose-annotator')(frame, keypoints)
+    cropped_humans = CropBoundingBoxes(name='crop')(frame, bounding_boxes)
+    human_features = HumanEncoder(
+        batch_size=int(enc.get('batch_size', 32)),
+        device_type=cfg.device,
+        name='encoder')(cropped_humans)
+    tracker_input = AppendFeaturesToBoundingBoxes(name='append-features')(bounding_boxes, human_features)
+    tracks = DeepSort(
+        min_height=int(trk.get('min_height', 0)),
+        max_cosine_distance=float(trk.get('max_cosine_distance', 0.2)),
+        nn_budget=trk.get('nn_budget'),
+        name='tracker')(tracker_input)
+    tracks_anotator_input = ConvertTracksForAnotation(name='convert-tracks')(tracks)
+    anotated_tracks = TrackerAnnotator(name='track-annotator')(anotated_keypoints, tracks_anotator_input)
+    writer = VideofileWriter(cfg.output_path(), name='writer')(anotated_tracks)
+    return Flow([writer], flow_type=cfg.flow_type)
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Track people across a video with pose + appearance re-id.')
+    ap.add_argument('--config', default='config.yaml')
+    ap.add_argument('--flow-type', choices=('batch', 'realtime'), default=None,
+                    help='override the config flow_type (default: from config, else batch)')
+    args = ap.parse_args()
+    # The local engine spawns worker subprocesses that must import
+    # `human_tracking_nodes` (and `common`) to reconstruct the glue nodes. Put
+    # this directory on PYTHONPATH so those imports resolve in the workers.
+    here = os.path.dirname(os.path.abspath(__file__))
+    os.environ['PYTHONPATH'] = here + os.pathsep + os.environ.get('PYTHONPATH', '')
+
+    cfg = load_config(args.config)
+    if args.flow_type is not None:
+        cfg.flow_type = args.flow_type
+    from videoflow.engines.local import LocalProcessEngine
+    flow = build_flow(cfg)
+    engine = LocalProcessEngine(blob_redis_url=os.environ.get('VIDEOFLOW_BLOB_REDIS_URL'))
+    flow.run(engine)
+    flow.join()
+    print(f'Wrote {cfg.output_path()}')
+
 
 if __name__ == '__main__':
-    from videoflow.engines.local import LocalProcessEngine
-    flow = build_flow()
-    flow.run(LocalProcessEngine())
-    flow.join()
+    main()

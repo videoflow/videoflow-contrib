@@ -3,3 +3,4 @@
 # come from here.
 tensorflow>=2.16,<2.18
 scipy>=1.11
+pyyaml>=6.0
