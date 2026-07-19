@@ -21,8 +21,18 @@ videoflow-contrib/
 │   ├── videoflow_contrib/<name>/   native namespace package
 │   │   └── __init__.py             re-exports the node classes
 │   └── tests/                      optional
-└── solutions/{offside, human_tracking, face_obfuscation}/
+└── solutions/{offside, human_tracking, face_obfuscation,
+              toy_calculator, toy_fusion, toy_router}/
 ```
+
+The three `toy_*` solutions are dependency-free framework exercisers (core
+videoflow only — no contrib packages, no models): `toy_calculator` (BATCH
+diamond: fan-out, trace join, replicas, aggregation), `toy_fusion` (REALTIME:
+unbounded producers, time-mode join with quorum/collect), `toy_router`
+(partitioned routing, an async node, an idempotent sink). Because they import
+no contrib code, they are the only solutions that run with
+`videoflow run-local` on the host, and the cheapest first target for any
+deploy verification.
 
 **`videoflow_contrib/` is a native namespace package — there is no
 `videoflow_contrib/__init__.py`, in any sub-package.** Adding one shadows the namespace and breaks
@@ -128,6 +138,8 @@ your component is a drop-in for others of its kind.
 - **`detector_tf/`** — the reference `ProcessorNode`, including the fixed-parameter idiom.
 - **`synced_video_reader/`** — the canonical hand-written `get_params()` override.
 - **`solutions/offside/`** — the fullest solution.
+- **`solutions/toy_calculator/`** — the smallest complete solution; read it before
+  writing a new one.
 
 ## Keep docs in sync with code
 

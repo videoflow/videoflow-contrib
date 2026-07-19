@@ -87,6 +87,9 @@ from the contrib repo root (solution Dockerfiles COPY sibling sub-packages):
 
 ```bash
 cd /home/jadiel/workspace/videoflow-contrib
+docker build -f solutions/toy_calculator/Dockerfile   -t videoflow-toy-calculator:r1   .
+docker build -f solutions/toy_fusion/Dockerfile       -t videoflow-toy-fusion:r1       .
+docker build -f solutions/toy_router/Dockerfile       -t videoflow-toy-router:r1       .
 docker build -f solutions/offside/gpu.Dockerfile      -t videoflow-offside:r1          .
 docker build -f solutions/human_tracking/Dockerfile   -t videoflow-human-tracking:r1   .
 docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-face-obfuscation:r1 .
@@ -95,6 +98,10 @@ docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-face-obfuscat
 docker run --rm --gpus all videoflow-offside:r1 \
     python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
+
+The three `toy_*` images copy a handful of pure-stdlib files onto
+`videoflow-base:py3.12` and build in seconds; they only need the CPU base image
+(none ships a `gpu.Dockerfile`).
 
 **Never let `videoflow deploy` autobuild** — always `--no-build --image <ref>`:
 
@@ -112,8 +119,20 @@ a tag after a fix silently runs the **stale** image.
 
 Do **not** install `videoflow_contrib` into the core venv. The components have mutually
 incompatible dependencies (tensorflow vs torch) and the repo is deliberate about this. The
-consequence is that `run-local` and `videoflow explain` are both unusable here — they compile on
-the host. `--dry-run` replaces them and is strictly better (see below).
+consequence is that `run-local` and `videoflow explain` are both unusable **for the three ML
+solutions** — they compile on the host. `--dry-run` replaces them and is strictly better (see
+below).
+
+The `toy_*` solutions are the exception: they import no contrib packages, so they compile and
+**run** on the host with nothing but the core CLI:
+
+```bash
+cd solutions/toy_calculator && videoflow run-local toy_calculator.py   # reuses a listening NATS
+```
+
+That is the cheapest end-to-end proof of the whole framework path (config, prep, compile,
+broker, workers, artifacts) — it needs no image and no cluster, so it works even when image
+loading into k3s is blocked. Run it before building anything.
 
 Record what you are testing; it belongs at the top of any report:
 
@@ -171,7 +190,102 @@ fallback. Pass `--config config.yaml` as well, for the mount resolution.
 Use `work_dir: ./out_nocommit` throughout: `*_nocommit*` is gitignored, so artifacts and
 root-owned container output stay out of `git status`.
 
-### `face_obfuscation` — start here
+Order: **toys first** (seconds per iteration, no weights, no network, and they run-local on the
+host before any image exists), then the CPU ML solutions, then `offside`.
+
+### `toy_calculator` — start here
+
+The smallest solution: a BATCH diamond over integers (fan-out, competing replicas on `square`,
+a trace join, a stateful aggregator, four sinks including a `metadata=True` consumer). Pure
+stdlib on `videoflow-base:py3.12`; zero network. The artifact is **self-checking**: `prepare.py`
+bakes `expected.json`, and the report consumer records whether the run reproduced it.
+
+```yaml
+# solutions/toy_calculator/config.yaml
+work_dir: ./out_nocommit
+start_value: 1
+end_value: 200
+producer_fps: 50
+delay_fps: 40
+flow_type: batch
+square: {workers: 2}
+join: {timeout_s: null, missing: wait, max_pending: 100000}
+```
+
+Success artifact: `out_nocommit/report.json`, fresh mtime, and — stronger than any mtime —
+
+```bash
+python3 -c "import json; r=json.load(open('out_nocommit/report.json')); print(r); assert r['matches_expected'] is True"
+```
+
+`matches_expected: false` with a short `pairs_seen` means messages were dropped somewhere —
+that is a framework/broker finding, not a toy quirk.
+
+### `toy_router`
+
+Partitioned parallelism: an `async def process` enricher stamps each event's sensor id as the
+partition key, a stateful counter runs 3 partitioned replicas (an **Indexed Job** on
+Kubernetes), and the ledger consumer is `idempotent=True` (exercises the Redis idempotency
+store). Also self-checking: `prepare.py` walks the producer's PRNG and bakes
+`expected_counts.json`.
+
+```yaml
+# solutions/toy_router/config.yaml
+work_dir: ./out_nocommit
+seed: 7
+events: 300
+sensors: 6
+rate_fps: 100
+idempotent_sink: true
+enrich: {threshold: 50.0, lookup_ms: 1.0}
+counter: {partitions: 3, partition_by: _partition_key}
+```
+
+Success artifact: `out_nocommit/counts.json`, fresh mtime, and
+
+```bash
+python3 -c "import json; c=json.load(open('out_nocommit/counts.json')); print(c); assert c['matches_expected'] is True and c['sticky'] is True"
+```
+
+With `partition_by: trace_id` the totals must still match but `sticky` goes `false` (keys
+spread across replicas) — drop that half of the assertion.
+
+### `toy_fusion` — the REALTIME one
+
+Two simulated cameras plus a 100 Hz IMU, fused by a **time-mode join** (tolerance 15ms, 0.25s
+lateness timeout, quorum, a 40ms collect window). Producers are unbounded when
+`duration_s: 0` — the flow runs until teardown, which is the REALTIME contract deploy holds you
+to: `deploy` returns after the ~30s schedulability check and success must be **observed**.
+
+```yaml
+# solutions/toy_fusion/config.yaml
+work_dir: ./out_nocommit
+cameras: 2
+camera_fps: 10
+phase_step_ms: 3.0
+sensor_hz: 100
+duration_s: 0            # cluster: run forever; run-local smoke: set 15
+flow_type: realtime
+fusion: {tolerance_ms: 15, timeout_s: 0.25, quorum: 1, sensor_window_ms: 40}
+```
+
+Verifying the cluster run (`duration_s: 0`):
+
+```bash
+# latest.json is atomically rewritten on every fused moment — watch it advance.
+stat -c '%y %n' solutions/toy_fusion/out_nocommit/latest.json   # run twice, a few seconds apart
+python3 -c "import json; m=json.load(open('solutions/toy_fusion/out_nocommit/latest.json')); print(m); assert m['views'] == m['expected_views'] and m['sensor_samples'] > 0"
+```
+
+then `videoflow teardown` ends the run. A bounded run (`duration_s > 0` — right for
+`run-local`) drains on its own and writes `fusion_summary.json`; assert
+`complete_moments > 0`. The producers align their tick grids to whole epoch seconds precisely
+so that independently-started workers can pair up; during startup skew the early camera's
+moments emit at quorum (`views < expected_views`), which is correct behaviour, not a failure.
+**`complete_moments: 0` for a whole run** means the timelines never met: check
+`fusion.tolerance_ms` against `phase_step_ms * (cameras - 1)` before suspecting the framework.
+
+### `face_obfuscation` — the cheapest ML solution
 
 The cheapest target: CPU only, one input, no prep beyond a weights fetch. The best first proof
 that the framework path works end to end. Build with the **CPU** `Dockerfile`; GPU demand 0.
@@ -269,6 +383,9 @@ the first run pays the download and a dead mirror is an infra blocker.
 
 | Solution | Dockerfile | GPU | Success artifact |
 |---|---|---|---|
+| `toy_calculator` | `Dockerfile` (CPU) | 0 | `out_nocommit/report.json` with `matches_expected: true` |
+| `toy_router` | `Dockerfile` (CPU) | 0 | `out_nocommit/counts.json` with `matches_expected: true` |
+| `toy_fusion` | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
 | `face_obfuscation` | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
 | `human_tracking` | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
 | `offside` | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
@@ -296,9 +413,11 @@ videoflow deploy offside.py \
 | `--keep-infra` | Amortises NATS+Redis across runs instead of paying recreation each time. |
 | *(no `--keep` by default)* | Deploy already dumps failed nodes' logs before teardown, and auto-teardown frees the GPUs. A kept offside run holds 3 of 4 and makes the next attempt go Pending. Add `--keep` only for a deliberate diagnostic re-run, then tear down immediately. |
 
-Wrap it in `timeout` (say 1800s for offside, 900s for the CPU solutions). A pod stuck in
-`ImagePullBackOff` is *not* "Unschedulable", so the 60s watchdog never fires and the wait can hang
-indefinitely. Treat a timeout as a triage signal, not a crash.
+Wrap it in `timeout` (say 1800s for offside, 900s for the CPU ML solutions, 300s for the toys —
+a toy BATCH run is seconds once pods start, and a REALTIME deploy returns after the ~30s
+schedulability check). A pod stuck in `ImagePullBackOff` is *not* "Unschedulable", so the 60s
+watchdog never fires and the wait can hang indefinitely. Treat a timeout as a triage signal, not
+a crash.
 
 Long builds and long BATCH runs exceed the foreground command timeout — run them in the background
 with output tee'd to a log, then poll.

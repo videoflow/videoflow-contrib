@@ -51,10 +51,13 @@ The one that most often fails: loading a locally-built image into k3s runs
 `sudo -n true` fails and the containerd socket isn't reachable, images cannot reach the cluster
 at all, and no code change in either repo fixes it.
 
-When that is the situation, still run the whole offline half of the pipeline before you report.
-A blocked report that also says *"all three solutions compile, render correct manifests, request
-exactly the GPUs they should, and have every baked path under a declared mount"* is worth far
-more than one that says "sudo failed".
+When that is the situation, still run the whole offline half of the pipeline before you report —
+and run the three `toy_*` solutions **end to end with `videoflow run-local`**, which needs no
+image and no cluster (they import no contrib packages, so they are the only solutions that can
+do this). A blocked report that also says *"every solution compiles, renders correct manifests,
+requests exactly the GPUs it should, has every baked path under a declared mount — and the
+framework path itself is proven end to end locally by the toys"* is worth far more than one that
+says "sudo failed".
 
 ## Images
 
@@ -78,19 +81,28 @@ the solution images build on top of it. Say so in the report; it is the expensiv
 
 ## What "it works" means
 
-All three solutions default to `flow_type: batch`, so the common case is the BATCH one.
+Five solutions default to `flow_type: batch`; `toy_fusion` defaults to `realtime` and is the
+REALTIME reference target.
 
 - **BATCH** — `videoflow deploy` blocks until the flow finishes, prints `Flow {flow_id}
   completed.` and exits 0. On failure it dumps the failed nodes' logs itself and raises
   `SystemExit('Flow failed: ...')`.
-- **REALTIME** — deploy applies and returns after a 30-second schedulability check. Verify by
-  hand: every pod `Ready` (`/readyz` only passes once `open()` returns),
-  `videoflow_messages_processed_total` climbing on `/metrics`, and an empty DLQ.
+- **REALTIME** — deploy applies and returns after a 30-second schedulability check; the run
+  ends only at teardown, so success must be **observed**: every pod `Ready` (`/readyz` only
+  passes once `open()` returns), `videoflow_messages_processed_total` climbing on `/metrics`,
+  an empty DLQ — and for `toy_fusion`, the concrete artifact check: `work_dir/latest.json` is
+  atomically rewritten on every fused moment, so its mtime and `moment` counter must advance
+  between two reads a few seconds apart.
 
 Success is a **conjunction**: exit 0, *and* the completion line, *and* the expected artifact in
 `work_dir` **with a fresh mtime**. Check the mtime, not merely that the file exists — prep and
 compile run as root in-image, so artifacts from an earlier run are root-owned and you cannot
 delete them without sudo. A stale file left behind will otherwise read as a pass.
+
+`toy_calculator` and `toy_router` add a conjunct stronger than any mtime: their artifacts are
+**self-checking** (`report.json` / `counts.json` carry `"matches_expected": true`, computed
+against ground truth the prep hook baked). Assert on it — it is the difference between "the
+flow ran" and "every message crossed every edge exactly once".
 
 **Never report "it works" from `deploy` exiting 0 alone, and never from pods being `Running`.**
 Running means the container started. Ready means the node opened. Neither means a frame moved.
@@ -160,6 +172,9 @@ Running means the container started. Ready means the node opened. Neither means 
 | `CUDA out of memory` with several GPU replicas | time-slicing advertises units but gives **no memory isolation** | config — lower resolution or fewer GPU stages |
 | Downstream node crashes on `None` | `process()` returned `None`; that is published, not dropped | contrib node |
 | Flow hangs, nothing fails, DLQ empty | a join never reaches quorum | contrib graph (`JoinPolicy`) |
+| A toy's `matches_expected: false` | messages dropped or duplicated on a loss-free BATCH path | core framework/broker — the toys have no other moving parts |
+| `toy_router` `sticky: false` under `_partition_key` | partition routing not pinning keys to replicas | core messaging |
+| `toy_fusion` `complete_moments: 0` all run | producer timelines never met — tolerance vs phase config | config first, then core (see the runbook) |
 | Messages in the DLQ | exceptions inside `process()` | usually contrib node |
 | Traceback inside `videoflow/runtime` or `videoflow/wire` | framework bug | core |
 | Weight download 404 / connection refused | dead mirror | **infra — stop** |
@@ -198,7 +213,9 @@ And in both repos:
 - **Green** — every solution completed with a fresh artifact. Tear everything down. Report.
 - **Blocked** — a failure no code change can fix. Report and stop; never retry an infra failure.
 - **Budget exhausted** — about 3 fix→rebuild→redeploy cycles per solution and 8 overall. A core
-  fix costs a rebuild of everything, so count it double.
+  fix costs a rebuild of everything, so count it double — but re-verify it against a toy first
+  (their images rebuild in seconds), and count toy-only iterations at half. The
+  same-symptom-twice rule below applies to toys unchanged.
 
 **The same symptom twice after a fix is a stop, not a third attempt.** Either the fix didn't take
 — check for a reused image tag first, it is the usual culprit — or the diagnosis is wrong. Revert
@@ -236,9 +253,13 @@ left behind, including `git diff --stat` for both repos.
    precondition probes. Several of its preconditions fail in ways that look like code bugs.
 2. **Get everything you can from `--dry-run` before spending a cluster deploy.** It exercises the
    whole compile path in-image for seconds, and most fixes can be confirmed there.
-3. **Do the cheap CPU solutions before the GPU one.** They share most of the framework path with
-   `offside` and cost far less per iteration, so they shake out core bugs cheaply. `offside` is
-   the most likely to fail — three cameras, a multi-parent join, and GPU.
+3. **Do the toys first, then the CPU ML solutions, then the GPU one.** The `toy_*` solutions
+   build in seconds, need no weights and no network, and between them exercise most of the
+   framework (both flow types, both join modes, replicated and partitioned stages, the
+   idempotency store) — so they shake out core and cluster bugs at near-zero cost, and a core
+   fix can be re-verified against them before paying for the big rebuilds. Before any image
+   exists, `videoflow run-local` on a toy proves the framework path with no cluster at all.
+   `offside` is the most likely to fail — three cameras, a multi-parent join, and GPU.
 4. **Collect evidence before teardown.** Once pods are gone, the logs are gone.
 5. **Name the layer before naming the fix.** If you can't tell which of the three it is, gather
    more evidence rather than guessing — a rebuild cycle costs far more than another
