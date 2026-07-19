@@ -16,6 +16,13 @@ detector:
   resolution: 1288
   conf_ball: 0.15
   tile_inference: false
+# Per-stage device. Only the detector is genuinely GPU-bound; tracker and pose
+# default to CPU so a 3-camera run claims 3 GPUs (one per detector), not 9 —
+# each 'gpu' stage claims one whole exclusive GPU per camera on Kubernetes.
+device:
+  detector: gpu
+  tracker: cpu
+  pose: cpu
 fusion:
   ref_fps: 30.0
   quorum: 2

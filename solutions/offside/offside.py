@@ -20,7 +20,6 @@ import os
 
 from common import load_config
 from offside_nodes import BallPick, FeaturePacker, FrameIndexSplitter, PersonBoxes, WorldStateJsonlWriter
-from videoflow.core.constants import GPU
 
 
 def build_flow(cfg=None):
@@ -55,11 +54,11 @@ def build_flow(cfg=None):
                               resolution=int(det.get('resolution', 1288)),
                               conf_ball=float(det.get('conf_ball', 0.15)),
                               tile_inference=bool(det.get('tile_inference', False)),
-                              device_type=GPU, name=f'detector-{cam}')(frame)
+                              device_type=cfg.device_for('detector'), name=f'detector-{cam}')(frame)
         pboxes = PersonBoxes(name=f'personboxes-{cam}')(dets)
         ball = BallPick(name=f'ball-{cam}')(dets)
-        tracks = BoxmotTracker(method='botsort', device_type=GPU, name=f'tracker-{cam}')(frame, pboxes)
-        pose = PoseTopDown(backend='rtmw', device_type=GPU, name=f'pose-{cam}')(frame, tracks)
+        tracks = BoxmotTracker(method='botsort', device_type=cfg.device_for('tracker'), name=f'tracker-{cam}')(frame, pboxes)
+        pose = PoseTopDown(backend='rtmw', device_type=cfg.device_for('pose'), name=f'pose-{cam}')(frame, tracks)
         team = TeamClassifier(centroids=teams, name=f'team-{cam}')(frame, tracks)
         packers.append(FeaturePacker(cam=cam, name=cam)(tracks, pose, team, ball))
 

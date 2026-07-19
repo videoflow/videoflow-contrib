@@ -30,6 +30,19 @@ class Config:
     fusion: dict = field(default_factory=dict)
     debug_overlays: bool = False
     flow_type: str = 'batch'           # 'batch' (recorded clips) or 'realtime' (live)
+    device: dict = field(default_factory=dict)  # per-stage 'cpu'/'gpu' (see device_for)
+
+    # Per-stage device defaults. Only the detector is genuinely GPU-bound: the
+    # shipped tracker runs without ReID weights (its GPU pod would hold an idle
+    # CUDA context), and top-down pose is usable on CPU. On Kubernetes every GPU
+    # stage claims a whole exclusive device per camera, so these defaults cut a
+    # 3-camera run from 9 GPU claims to 3 — see the videoflow GPU-sharing docs.
+    DEVICE_DEFAULTS = {'detector': 'gpu', 'tracker': 'cpu', 'pose': 'cpu'}
+
+    def device_for(self, stage: str) -> str:
+        '''``videoflow.core.constants`` device for a pipeline stage ('detector',
+        'tracker', 'pose'), from ``device.<stage>`` in the config.'''
+        return self.device.get(stage, self.DEVICE_DEFAULTS[stage])
 
     @property
     def work(self) -> str:
@@ -84,6 +97,13 @@ def load_config(path: str) -> Config:
     flow_type = str(raw.get('flow_type', 'batch')).lower()
     if flow_type not in ('batch', 'realtime'):
         raise ValueError(f"flow_type must be 'batch' or 'realtime', got {flow_type!r}")
+    device = {k: str(v).lower() for k, v in (raw.get('device') or {}).items()}
+    for stage, dev in device.items():
+        if stage not in Config.DEVICE_DEFAULTS:
+            raise ValueError(f"device.{stage}: unknown stage; expected one of "
+                             f"{sorted(Config.DEVICE_DEFAULTS)}")
+        if dev not in ('cpu', 'gpu'):
+            raise ValueError(f"device.{stage} must be 'cpu' or 'gpu', got {dev!r}")
     return Config(
         path=os.path.abspath(path),
         work_dir=work_dir,
@@ -99,4 +119,5 @@ def load_config(path: str) -> Config:
         fusion=raw.get('fusion', {}),
         debug_overlays=bool(raw.get('debug_overlays', False)),
         flow_type=flow_type,
+        device=device,
     )

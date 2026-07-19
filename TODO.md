@@ -1,6 +1,5 @@
 # Issue with the offside system
-The __main__ gotcha bit me (the one my own plan warned about): running the flow script directly made glue-node classes __main__.X, unimportable by workers. Fixed with a driver that imports the module — worth keeping in mind for the real offside.py deployment (it's already structured correctly for videoflow deploy, which imports build_flow).
-
-A cosmetic videoflow-core issue (not my components): workers log a NATS-drain TimeoutError at shutdown, after all work completes — output was fully intact. If you want, I can dig into videoflow/messaging to make worker shutdown drain cleanly.
-
-Upload models to github
+- add a CLAUDE.md file to both videoflow and videoflow-contrib with best practices in Python coding.
+- Check if generators are vbetter suited for Producers and Processors, given that they could allow more efficiency through the implementation of buffer accumulation for eeither GPU batching or cpu multiprocessing.
+- Review the code to see how to better organize videoflow core and see if there are certain functionalities that could be abstracted for better extensibility  in the future.
+- Refactor the offsite solution so that multiple cameras share the same processor, so extra processors should be implemented later in the graph to split the stream by camera when needed.

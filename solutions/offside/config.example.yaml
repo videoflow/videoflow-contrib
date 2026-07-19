@@ -37,6 +37,17 @@ detector:
   conf_ball: 0.15
   tile_inference: false   # enable for very distant balls (slower)
 
+# Per-stage device ('cpu' or 'gpu'). On Kubernetes every 'gpu' stage claims one
+# whole exclusive GPU *per camera*, so the defaults below keep a 3-camera run at
+# 3 GPU claims (detectors only) instead of 9. The shipped tracker runs without
+# ReID weights (a GPU buys it nothing), and top-down pose works on CPU — set
+# them to gpu only on a cluster with devices to spare (or use time-slicing /
+# `--gpu-mode shared`; see the videoflow GPU-sharing docs).
+device:
+  detector: gpu
+  tracker: cpu
+  pose: cpu
+
 fusion:
   ref_fps: 30.0
   quorum: 2               # emit a moment with >= 2 camera views
