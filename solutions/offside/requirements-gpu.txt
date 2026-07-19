@@ -5,9 +5,9 @@ numpy>=1.24
 scipy>=1.11
 pyyaml>=6.0
 pillow
-rfdetr>=1.0
-boxmot>=11.0
+rfdetr>=1.0,<1.9
+boxmot>=11.0,<13
 rtmlib>=0.0.13
-onnxruntime-gpu>=1.17
+onnxruntime-gpu>=1.17,<1.23
 ultralytics>=8.2
 scikit-learn>=1.3

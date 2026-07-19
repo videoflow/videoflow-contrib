@@ -13,7 +13,7 @@ dependencies = [
     "videoflow>=1.0.0",
     "numpy>=1.24",
     "ultralytics>=8.2",   # 'yolo' backend — runs anywhere (torch >= 2.0)
-    "rfdetr>=1.0",        # 'rfdetr' backend — higher accuracy, needs torch >= 2.4
+    "rfdetr>=1.0,<1.9",   # 'rfdetr' backend — higher accuracy, needs torch >= 2.4
     "pillow",
 ]
 classifiers = [
@@ -28,7 +28,7 @@ classifiers = [
 
 # GPU: the -cuda base image provides CUDA torch; rfdetr uses it.
 [project.optional-dependencies]
-gpu = ["rfdetr>=1.0"]
+gpu = ["rfdetr>=1.0,<1.9"]
 
 [project.urls]
 Homepage = "https://github.com/videoflow/videoflow-contrib"

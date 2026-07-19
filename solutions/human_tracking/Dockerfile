@@ -33,8 +33,17 @@ RUN uv pip install --system --no-cache \
 COPY solutions/human_tracking/requirements.txt ./
 RUN uv pip install --system --no-cache -r requirements.txt
 
-# 3. Build detectron2 from source against the installed torch.
-RUN uv pip install --system --no-cache \
+# tensorflow pins protobuf<5, which silently downgrades the base image's protobuf
+# below the >=5.27 the generated videoflow.v1 wire modules require (runtime_version)
+# — every worker in the image then dies at import. Restore the core floor;
+# tensorflow runs fine against the newer runtime.
+RUN uv pip install --system --no-cache 'protobuf>=5.27'
+
+# 3. Build detectron2 from source against the installed torch. Its setup.py
+#    imports torch, so build isolation must be off (and the build backend's own
+#    deps — setuptools/wheel — must already be in the system env).
+RUN uv pip install --system --no-cache setuptools wheel && \
+    uv pip install --system --no-cache --no-build-isolation \
         'git+https://github.com/facebookresearch/detectron2.git'
 
 # 4. The contrib sub-packages the graph imports. --no-deps: videoflow is already in base.

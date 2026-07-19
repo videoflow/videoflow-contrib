@@ -5,8 +5,8 @@ numpy>=1.24
 scipy>=1.11
 pyyaml>=6.0
 pillow
-rfdetr>=1.0
-boxmot>=11.0
+rfdetr>=1.0,<1.9
+boxmot>=11.0,<13
 rtmlib>=0.0.13
 onnxruntime>=1.17
 ultralytics>=8.2

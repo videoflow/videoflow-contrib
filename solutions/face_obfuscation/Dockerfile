@@ -22,6 +22,12 @@ WORKDIR /app
 COPY solutions/face_obfuscation/requirements.txt ./
 RUN uv pip install --system --no-cache -r requirements.txt
 
+# tensorflow pins protobuf<5, which silently downgrades the base image's protobuf
+# below the >=5.27 the generated videoflow.v1 wire modules require (runtime_version)
+# — every worker in the image then dies at import. Restore the core floor;
+# tensorflow runs fine against the newer runtime.
+RUN uv pip install --system --no-cache 'protobuf>=5.27'
+
 # The contrib sub-packages this solution's graph imports. --no-deps: videoflow is
 # already in the base image.
 COPY detector_tf /src/detector_tf

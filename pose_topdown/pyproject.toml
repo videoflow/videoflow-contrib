@@ -27,7 +27,7 @@ classifiers = [
 
 # GPU: swap onnxruntime for onnxruntime-gpu (rtmlib uses the CUDA provider).
 [project.optional-dependencies]
-gpu = ["onnxruntime-gpu>=1.17"]
+gpu = ["onnxruntime-gpu>=1.17,<1.23"]
 
 [project.urls]
 Homepage = "https://github.com/videoflow/videoflow-contrib"

@@ -50,7 +50,7 @@ class BoxmotTracker(OneTaskProcessorNode):
         import inspect
         from pathlib import Path
 
-        from boxmot.trackers import (  # lazy: heavy (torch)
+        from boxmot import (  # lazy: heavy (torch)
             BoostTrack,
             BotSort,
             ByteTrack,
@@ -72,6 +72,11 @@ class BoxmotTracker(OneTaskProcessorNode):
         kw: dict = {}
         if 'reid_model' in params and self._reid_weights is not None:
             kw['reid_model'] = Path(self._reid_weights)
+        if 'reid_weights' in params:
+            # boxmot 12.x naming — and a *required* positional there, even with
+            # appearance ReID off (the ctor never touches it when with_reid is
+            # False, so None is safe then).
+            kw['reid_weights'] = Path(self._reid_weights) if self._reid_weights is not None else None
         if 'with_reid' in params:
             kw['with_reid'] = with_reid
         if 'cmc_method' in params:

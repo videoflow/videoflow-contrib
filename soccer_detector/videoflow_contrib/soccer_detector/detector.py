@@ -86,7 +86,14 @@ class SoccerDetector(ObjectDetector):
         else:  # rfdetr — RF-DETR-Large SoccerNet checkpoint (128M, DINOv2, 1280 res)
             import rfdetr  # lazy: heavy (torch >= 2.4)
             path = self._checkpoint or get_file(*_RFDETR_WEIGHTS)
-            Model = rfdetr.RFDETRLarge if self._model_size == 'large' else rfdetr.RFDETRBase
+            if self._model_size == 'large':
+                # rfdetr >= 1.7 re-architected RFDETRLarge (DINOv2 patch14 -> patch16)
+                # and kept the old architecture as RFDETRLargeDeprecated (gone in 1.9,
+                # hence the <1.9 pin). The SoccerNet checkpoint is the old patch14
+                # arch, so prefer that class where the installed rfdetr still has it.
+                Model = getattr(rfdetr, 'RFDETRLargeDeprecated', rfdetr.RFDETRLarge)
+            else:
+                Model = rfdetr.RFDETRBase
             self._model = Model(pretrain_weights=path, resolution=self._resolution)
             try:
                 self._model.optimize_for_inference()
@@ -99,8 +106,11 @@ class SoccerDetector(ObjectDetector):
         return min(self._conf_person, self._conf_ball)
 
     def _detect(self, im: np.ndarray) -> np.ndarray:
-        # YOLO (ultralytics) expects BGR; RF-DETR expects RGB.
-        img = im if self._backend == 'yolo' else (im[..., ::-1] if im.shape[-1] == 3 else im)
+        # YOLO (ultralytics) expects BGR; RF-DETR expects RGB. The flip must be a
+        # contiguous copy, not a view: rfdetr feeds it to torch.from_numpy, which
+        # rejects the negative-stride view a bare im[..., ::-1] produces.
+        img = im if self._backend == 'yolo' else (
+            np.ascontiguousarray(im[..., ::-1]) if im.shape[-1] == 3 else im)
         if self._tile_inference:
             dets = self._detect_tiled(img)
         else:

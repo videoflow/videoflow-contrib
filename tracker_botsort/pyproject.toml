@@ -12,7 +12,7 @@ requires-python = ">=3.12"
 dependencies = [
     "videoflow>=1.0.0",
     "numpy>=1.24",
-    "boxmot>=11.0",
+    "boxmot>=11.0,<13",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -25,7 +25,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-gpu = ["boxmot>=11.0"]
+gpu = ["boxmot>=11.0,<13"]
 
 [project.urls]
 Homepage = "https://github.com/videoflow/videoflow-contrib"

@@ -27,7 +27,10 @@ RUN uv pip install --system --no-cache \
 
 # 2. Build detectron2 from source (CPU) against the installed torch. Pin a ref for
 #    reproducibility if a future main branch breaks against your torch (e.g. a sha).
-RUN uv pip install --system --no-cache \
+#    Its setup.py imports torch, so build isolation must be off (and setuptools/
+#    wheel must already be in the system env).
+RUN uv pip install --system --no-cache setuptools wheel && \
+    uv pip install --system --no-cache --no-build-isolation \
         'git+https://github.com/facebookresearch/detectron2.git'
 
 # 3. The videoflow_contrib.detectron2 package (ships the model configs as package

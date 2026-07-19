@@ -22,7 +22,7 @@ kubectl get runtimeclass nvidia                      # the opt-in GPU runtime
 kubectl get nodes -l videoflow.io/gpu-pool=true -o name
 kubectl get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}'   # expect 4
 
-sudo -n true                                         # THE GATING PROBE — see below
+sudo -n -l k3s ctr images import -                   # THE GATING PROBE — see below
 df -h /                                              # images land twice: docker + containerd
 docker system df
 
@@ -34,19 +34,20 @@ mkdir -p ~/.videoflow/models ~/.torch ~/.cache       # else root-owned container
 `videoflow deploy` loads a locally-built image into k3s with
 `docker save <img> | sudo k3s ctr images import -`
 ([`cluster.py`](../../../videoflow/videoflow/deploy/cluster.py)). That needs **passwordless
-sudo**. On this machine it currently fails:
+sudo for that exact command**. This machine's sudoers now whitelists it and nothing else, so
+probe the command itself, not sudo in general:
 
 ```
+$ sudo -n -l k3s ctr images import -
+/usr/local/bin/k3s ctr images import -        # allowed → image loading works
 $ sudo -n true
-sudo: a password is required
-$ ls -l /run/k3s/containerd/containerd.sock
-srw-rw---- 1 root root ...                    # and `ctr` against it also fails
+sudo: a password is required                  # FALSE NEGATIVE here — do not gate on this
 ```
 
-An agent has no TTY to answer the prompt, so **image loading is blocked and no code change in
-either repo fixes it.** The realistic unblocks are operator actions: a sudoers `NOPASSWD` entry
-for `k3s ctr images import`, group ownership on the containerd socket, or a registry the node can
-pull from (none is running, and `/etc/rancher/k3s/registries.yaml` needs root).
+If the `-l` probe fails too, image loading is blocked and no code change in either repo fixes
+it — an agent has no TTY to answer the prompt. The realistic unblocks are operator actions: the
+sudoers `NOPASSWD` entry above, group ownership on the containerd socket, or a registry the node
+can pull from (none is running, and `/etc/rancher/k3s/registries.yaml` needs root).
 
 When this is the situation, **still run the whole offline half of the pipeline before reporting** —
 everything through the `--dry-run` render below works without a cluster and proves far more than

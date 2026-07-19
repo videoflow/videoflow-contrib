@@ -25,8 +25,11 @@ RUN uv pip install --system --break-system-packages --no-cache \
 
 # 2. Build detectron2 from source with CUDA ops enabled (FORCE_CUDA=1 so the CUDA
 #    kernels are compiled even though no GPU is visible during the image build).
+#    Its setup.py imports torch, so build isolation must be off (and setuptools/
+#    wheel must already be in the system env).
 ENV FORCE_CUDA=1
-RUN uv pip install --system --break-system-packages --no-cache \
+RUN uv pip install --system --break-system-packages --no-cache setuptools wheel && \
+    uv pip install --system --break-system-packages --no-cache --no-build-isolation \
         'git+https://github.com/facebookresearch/detectron2.git'
 
 # 3. The videoflow_contrib.detectron2 package. --no-deps: videoflow is already in base.
