@@ -24,6 +24,9 @@ repos:
         args: [--allow-multiple-documents]
       - id: check-toml       # the per-component pyproject.toml + ruff.toml
       - id: check-added-large-files
+        # Raised from the 500kB default to match core. 2MB still catches the
+        # mistakes this hook is for — committed model weights, datasets, videos.
+        args: [--maxkb=2048]
       - id: check-merge-conflict
       - id: debug-statements
 
