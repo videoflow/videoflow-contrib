@@ -5,7 +5,7 @@ files `videoflow deploy` expects. `solutions/offside/` is the fullest example â€
 this document.
 
 > Keep this file in sync with the solution conventions in
-> [`../../../videoflow/videoflow/solution.py`](../../../videoflow/videoflow/solution.py) (its
+> [`../../../videoflow/videoflow/deploy/solution.py`](../../../videoflow/videoflow/deploy/solution.py) (its
 > module docstring is the normative spec) and with each solution's own `README.md`.
 
 ## Anatomy

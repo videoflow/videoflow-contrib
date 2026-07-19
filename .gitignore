@@ -7,6 +7,10 @@ __pycache__/
 *.mp4
 *.avi
 
+# Per-machine solution configs: generated from config.template.yaml and full of
+# absolute paths. config.example.yaml and config.template.yaml are the tracked ones.
+solutions/*/config.yaml
+
 # Folder with models downloaded
 models/
 

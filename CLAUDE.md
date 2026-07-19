@@ -140,6 +140,9 @@ A change isn't done until the docs describing it are updated **in the same commi
 - For solutions: the solution's `README.md` **and** `config.template.yaml`.
 - [.claude/agents/videoflow-author.md](.claude/agents/videoflow-author.md) — when the node contract
   or sub-package layout changes.
+- [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — when a solution's config keys,
+  prep artifacts, or required deploy flags change. Its recipes are executable, so they go stale
+  silently and only fail on the next cluster run.
 - `CLAUDE.md` and `.claude/docs/*.md` — when conventions, layout, or commands change.
 - The sibling [../videoflow](../videoflow) repo, if the change was driven by a core-API change.
 
@@ -147,8 +150,13 @@ A change isn't done until the docs describing it are updated **in the same commi
 
 - [.claude/agents/videoflow-author.md](.claude/agents/videoflow-author.md) — the deep node-contract
   and authoring reference. Not duplicated here; read it before writing a component.
+- [.claude/agents/solution-verifier.md](.claude/agents/solution-verifier.md) — the other side of
+  that: deploys every solution to a real cluster, and triages failures across this repo, the core
+  repo, and the infrastructure.
 - [.claude/docs/ADDING_A_COMPONENT.md](.claude/docs/ADDING_A_COMPONENT.md) — checklist for a new
   sub-package.
 - [.claude/docs/SOLUTIONS.md](.claude/docs/SOLUTIONS.md) — anatomy of a solution and how it deploys.
+- [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — cluster preconditions, the
+  mandatory deploy flags, and the per-solution recipes.
 - [README.md](README.md) — the user-facing guide.
 - [../videoflow/CLAUDE.md](../videoflow/CLAUDE.md) — the core framework.
