@@ -44,8 +44,16 @@ Everything is currently at version `1.0.0`.
 cd <component> && uv build          # build the wheel
 cd <component> && pytest            # run that component's tests
 ./validate-components.sh            # validate every component.yaml
-pipx install pre-commit && pre-commit install
+uv tool install pre-commit && pre-commit install
 ```
+
+**pre-commit must be >= 3.2.0** — the pinned `pre-commit-hooks` v5 uses the renamed stages, and an
+older binary fails with `InvalidManifestError: ... but got: 'pre-commit'`. Ubuntu's packaged
+2.17.0 at `/usr/bin/pre-commit` is a common culprit; install into `~/.local/bin` and keep that
+ahead of `/usr/bin` on `PATH`. See
+[../videoflow/CLAUDE.md](../videoflow/CLAUDE.md#commands) for the full explanation.
+
+There is no pre-push hook here (unlike core) because there is no repo-wide test run — see below.
 
 **There is no repo-wide test run, and that is deliberate.** Components have mutually incompatible
 dependencies (tensorflow vs torch), so a single local environment isn't meaningful — each is
