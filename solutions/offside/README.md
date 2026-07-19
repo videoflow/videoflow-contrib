@@ -139,7 +139,16 @@ above: `videoflow deploy offside.py` does config, prep, images, broker, run, and
 teardown in one command.
 
 **Locally** (all workers as subprocesses on this machine; needs the
-[Install](#install-local-runs--manual-prep) step):
+[Install](#install-local-runs--manual-prep) step). One command — it asks for the
+config if there isn't one, runs the prep pipeline, starts a dev broker in Docker
+if none is running, and cleans up after itself:
+
+```bash
+cd solutions/offside
+videoflow run-local offside.py
+```
+
+Or drive it manually, which needs a broker of your own:
 
 ```bash
 # from the videoflow repo (NATS + Redis for the distributed workers)

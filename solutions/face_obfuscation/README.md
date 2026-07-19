@@ -44,16 +44,30 @@ pip install -e ./detector_tf -e ./tracker_sort
 pip install -r solutions/face_obfuscation/requirements.txt      # or requirements-gpu.txt
 ```
 
-## Run locally
+## Run locally (no cluster)
+
+One command — it asks for the config if there isn't one, warms the weight cache,
+starts a dev broker in Docker if none is running, runs every node as a local
+subprocess, and cleans up after itself:
 
 ```bash
 cd solutions/face_obfuscation
+videoflow run-local face_obfuscation.py
+```
+
+Or drive it manually, which needs a broker of your own:
+
+```bash
+cd /path/to/videoflow && docker compose up -d nats redis   # NATS :4222, Redis :6379
+export VIDEOFLOW_BLOB_REDIS_URL=redis://localhost:6379/0   # frames >512KB use the blob store
+
+cd /path/to/videoflow-contrib/solutions/face_obfuscation
 cp config.example.yaml config.yaml     # then set input_video
-python prepare.py --config config.yaml # optional: warm the weight cache
+python prepare.py --config config.yaml # warm the weight cache
 python face_obfuscation.py --config config.yaml [--flow-type batch|realtime]
 ```
 
-Output: `<work_dir>/<output_video>` (default `out/blurred_video.mp4`).
+Output: `<work_dir>/<output_video>` (default `out/blurred_video.avi`).
 
 ## Configuration reference (`config.yaml`)
 

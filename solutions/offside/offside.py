@@ -10,8 +10,8 @@ Run (after the three prep scripts), from this directory:
     python offside.py --config config.yaml
 
 The glue nodes live in ``offside_nodes.py`` (a real importable module) so the
-distributed workers can reconstruct them by class path; ``main`` puts this
-directory on PYTHONPATH so the worker subprocesses can import that module.
+distributed workers can reconstruct them by class path (the local engine puts
+this directory on each worker's PYTHONPATH automatically).
 '''
 from __future__ import annotations
 
@@ -102,12 +102,6 @@ def main():
     ap.add_argument('--flow-type', choices=('batch', 'realtime'), default=None,
                     help='override the config flow_type (default: from config, else batch)')
     args = ap.parse_args()
-    # The local engine spawns worker subprocesses that must import `offside_nodes`
-    # (and `common`) to reconstruct the glue nodes. Put this directory on PYTHONPATH
-    # so those imports resolve in the workers (they inherit os.environ).
-    here = os.path.dirname(os.path.abspath(__file__))
-    os.environ['PYTHONPATH'] = here + os.pathsep + os.environ.get('PYTHONPATH', '')
-
     cfg = load_config(args.config)
     if args.flow_type is not None:
         cfg.flow_type = args.flow_type
@@ -116,6 +110,9 @@ def main():
     engine = LocalProcessEngine(blob_redis_url=os.environ.get('VIDEOFLOW_BLOB_REDIS_URL'))
     flow.run(engine)
     flow.join()
+    if engine.failures():
+        engine.report_failures()
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

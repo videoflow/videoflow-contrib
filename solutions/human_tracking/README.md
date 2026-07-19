@@ -61,10 +61,24 @@ pip install -r solutions/human_tracking/requirements.txt   # or requirements-gpu
 # index URLs and the source build.
 ```
 
-## Run locally
+## Run locally (no cluster)
+
+One command — it asks for the config if there isn't one, fetches the sample clip
+and encoder weights, starts a dev broker in Docker if none is running, runs every
+node as a local subprocess, and cleans up after itself:
 
 ```bash
 cd solutions/human_tracking
+videoflow run-local human_tracking.py
+```
+
+Or drive it manually, which needs a broker of your own:
+
+```bash
+cd /path/to/videoflow && docker compose up -d nats redis   # NATS :4222, Redis :6379
+export VIDEOFLOW_BLOB_REDIS_URL=redis://localhost:6379/0   # frames >512KB use the blob store
+
+cd /path/to/videoflow-contrib/solutions/human_tracking
 cp config.example.yaml config.yaml
 python prepare.py --config config.yaml    # fetch the clip + encoder weights
 python human_tracking.py --config config.yaml [--flow-type batch|realtime]

@@ -15,8 +15,8 @@ Local run, all workers as subprocesses on this machine:
     python human_tracking.py --config config.yaml
 
 The glue nodes live in ``human_tracking_nodes.py`` (a real importable module) so
-distributed workers can reconstruct them by class path; ``main`` puts this
-directory on PYTHONPATH so the worker subprocesses can import that module.
+distributed workers can reconstruct them by class path (the local engine puts
+this directory on each worker's PYTHONPATH automatically).
 '''
 from __future__ import annotations
 
@@ -82,12 +82,6 @@ def main():
     ap.add_argument('--flow-type', choices=('batch', 'realtime'), default=None,
                     help='override the config flow_type (default: from config, else batch)')
     args = ap.parse_args()
-    # The local engine spawns worker subprocesses that must import
-    # `human_tracking_nodes` (and `common`) to reconstruct the glue nodes. Put
-    # this directory on PYTHONPATH so those imports resolve in the workers.
-    here = os.path.dirname(os.path.abspath(__file__))
-    os.environ['PYTHONPATH'] = here + os.pathsep + os.environ.get('PYTHONPATH', '')
-
     cfg = load_config(args.config)
     if args.flow_type is not None:
         cfg.flow_type = args.flow_type
@@ -96,6 +90,9 @@ def main():
     engine = LocalProcessEngine(blob_redis_url=os.environ.get('VIDEOFLOW_BLOB_REDIS_URL'))
     flow.run(engine)
     flow.join()
+    if engine.failures():
+        engine.report_failures()
+        raise SystemExit(1)
     print(f'Wrote {cfg.output_path()}')
 
 
