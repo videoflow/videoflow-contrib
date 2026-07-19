@@ -1,6 +1,6 @@
 # videoflow-contrib: Videoflow community contributions
 
-[![Build Status](https://travis-ci.org/videoflow/videoflow-contrib.svg?branch=master)](https://travis-ci.org/videoflow/videoflow-contrib)
+[![Build Status](https://github.com/videoflow/videoflow-contrib/actions/workflows/components.yml/badge.svg)](https://github.com/videoflow/videoflow-contrib/actions/workflows/components.yml)
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg?maxAge=2592000)](https://github.com/videoflow/videoflow-contrib/blob/master/LICENSE)
 
 This library is the official extension repository for the Videoflow library.
