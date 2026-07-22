@@ -88,9 +88,6 @@ from the contrib repo root (solution Dockerfiles COPY sibling sub-packages):
 
 ```bash
 cd /home/jadiel/workspace/videoflow-contrib
-docker build -f solutions/toy_calculator/Dockerfile   -t videoflow-toy-calculator:r1   .
-docker build -f solutions/toy_fusion/Dockerfile       -t videoflow-toy-fusion:r1       .
-docker build -f solutions/toy_router/Dockerfile       -t videoflow-toy-router:r1       .
 docker build -f solutions/offside/gpu.Dockerfile      -t videoflow-offside:r1          .
 docker build -f solutions/human_tracking/Dockerfile   -t videoflow-human-tracking:r1   .
 docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-face-obfuscation:r1 .
@@ -100,9 +97,17 @@ docker run --rm --gpus all videoflow-offside:r1 \
     python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
-The three `toy_*` images copy a handful of pure-stdlib files onto
-`videoflow-base:py3.12` and build in seconds; they only need the CPU base image
-(none ships a `gpu.Dockerfile`).
+The `toy_*` solutions live in the **core** repo now, and build from *its* root:
+
+```bash
+cd /home/jadiel/workspace/videoflow
+docker build -f solutions/toy_calculator/Dockerfile   -t videoflow-toy-calculator:r1   .
+docker build -f solutions/toy_fusion/Dockerfile       -t videoflow-toy-fusion:r1       .
+docker build -f solutions/toy_router/Dockerfile       -t videoflow-toy-router:r1       .
+```
+
+Those three images copy a handful of pure-stdlib files onto `videoflow-base:py3.12` and build in
+seconds; they only need the CPU base image (none ships a `gpu.Dockerfile`).
 
 **Never let `videoflow deploy` autobuild** — always `--no-build --image <ref>`:
 
@@ -125,10 +130,14 @@ solutions** — they compile on the host. `--dry-run` replaces them and is stric
 below).
 
 The `toy_*` solutions are the exception: they import no contrib packages, so they compile and
-**run** on the host with nothing but the core CLI:
+**run** on the host with nothing but the core CLI — from the core checkout:
 
 ```bash
-cd solutions/toy_calculator && videoflow run-local toy_calculator.py   # reuses a listening NATS
+cd /home/jadiel/workspace/videoflow/solutions/toy_calculator
+videoflow run-local toy_calculator.py     # reuses a listening NATS
+
+# or all three at once, with their assertions already written:
+cd /home/jadiel/workspace/videoflow && uv run pytest tests/integration/test_toy_solutions.py
 ```
 
 That is the cheapest end-to-end proof of the whole framework path (config, prep, compile,
@@ -194,6 +203,9 @@ root-owned container output stay out of `git status`.
 Order: **toys first** (seconds per iteration, no weights, no network, and they run-local on the
 host before any image exists), then the CPU ML solutions, then `offside`.
 
+The three toy recipes below are for solutions in the **core** repo — run them from
+`/home/jadiel/workspace/videoflow/solutions/<name>/`, not from this one.
+
 ### `toy_calculator` — start here
 
 The smallest solution: a BATCH diamond over integers (fan-out, competing replicas on `square`,
@@ -202,7 +214,7 @@ stdlib on `videoflow-base:py3.12`; zero network. The artifact is **self-checking
 bakes `expected.json`, and the report consumer records whether the run reproduced it.
 
 ```yaml
-# solutions/toy_calculator/config.yaml
+# <core repo>/solutions/toy_calculator/config.yaml
 work_dir: ./out_nocommit
 start_value: 1
 end_value: 200
@@ -231,7 +243,7 @@ store). Also self-checking: `prepare.py` walks the producer's PRNG and bakes
 `expected_counts.json`.
 
 ```yaml
-# solutions/toy_router/config.yaml
+# <core repo>/solutions/toy_router/config.yaml
 work_dir: ./out_nocommit
 seed: 7
 events: 300
@@ -259,7 +271,7 @@ lateness timeout, quorum, a 40ms collect window). Producers are unbounded when
 to: `deploy` returns after the ~30s schedulability check and success must be **observed**.
 
 ```yaml
-# solutions/toy_fusion/config.yaml
+# <core repo>/solutions/toy_fusion/config.yaml
 work_dir: ./out_nocommit
 cameras: 2
 camera_fps: 10
@@ -274,6 +286,7 @@ Verifying the cluster run (`duration_s: 0`):
 
 ```bash
 # latest.json is atomically rewritten on every fused moment — watch it advance.
+cd /home/jadiel/workspace/videoflow
 stat -c '%y %n' solutions/toy_fusion/out_nocommit/latest.json   # run twice, a few seconds apart
 python3 -c "import json; m=json.load(open('solutions/toy_fusion/out_nocommit/latest.json')); print(m); assert m['views'] == m['expected_views'] and m['sensor_samples'] > 0"
 ```
@@ -382,14 +395,14 @@ the first run pays the download and a dead mirror is an infra blocker.
 
 ### Summary
 
-| Solution | Dockerfile | GPU | Success artifact |
-|---|---|---|---|
-| `toy_calculator` | `Dockerfile` (CPU) | 0 | `out_nocommit/report.json` with `matches_expected: true` |
-| `toy_router` | `Dockerfile` (CPU) | 0 | `out_nocommit/counts.json` with `matches_expected: true` |
-| `toy_fusion` | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
-| `face_obfuscation` | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
-| `human_tracking` | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
-| `offside` | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
+| Solution | Repo | Dockerfile | GPU | Success artifact |
+|---|---|---|---|---|
+| `toy_calculator` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/report.json` with `matches_expected: true` |
+| `toy_router` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/counts.json` with `matches_expected: true` |
+| `toy_fusion` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
+| `face_obfuscation` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
+| `human_tracking` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
+| `offside` | contrib | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
 
 ## Deploy
 

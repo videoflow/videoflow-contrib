@@ -2,10 +2,14 @@
 
 A solution is an end-to-end, deployable videoflow application: a graph module plus the sibling
 files `videoflow deploy` expects. `solutions/offside/` is the fullest example — read it alongside
-this document. The three `toy_*` solutions are the smallest complete ones, built from core nodes
-only: `toy_calculator` (the minimal reference for the full file convention, prep hook included),
-`toy_fusion` (a REALTIME solution, and the example of legitimately shipping *no* `prepare.py`
-and no GPU Dockerfile — both files are optional), and `toy_router` (partitioned routing).
+this document.
+
+The smallest complete examples live in the **core** repo, under
+[`../../../videoflow/solutions/`](../../../videoflow/solutions/), where they also serve as its
+end-to-end test suite: `toy_calculator` (the minimal reference for the full file convention, prep
+hook included), `toy_fusion` (a REALTIME solution, and the example of legitimately shipping *no*
+`prepare.py` and no GPU Dockerfile — both files are optional), and `toy_router` (partitioned
+routing). The file convention is identical wherever a solution lives.
 
 > Keep this file in sync with the solution conventions in
 > [`../../../videoflow/videoflow/deploy/solution.py`](../../../videoflow/videoflow/deploy/solution.py) (its
