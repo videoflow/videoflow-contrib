@@ -74,29 +74,28 @@ command from its own directory:
 | [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow deploy face_obfuscation.py` |
 | [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow deploy human_tracking.py` |
 | [offside](solutions/offside) | Multi-camera FIFA-style semi-automated offside detection. | `videoflow deploy offside.py` |
-| [toy_calculator](solutions/toy_calculator) | **Toy, BATCH**: a diamond over integers — fan-out, trace join, replicas, aggregation — with a self-checking result. | `videoflow deploy toy_calculator.py` |
-| [toy_fusion](solutions/toy_fusion) | **Toy, REALTIME**: simulated cameras + IMU fused by event time (tolerance, quorum, collect); unbounded producers. | `videoflow deploy toy_fusion.py` |
-| [toy_router](solutions/toy_router) | **Toy, BATCH**: partition-sticky per-key counting — `partition_by`, an async node, an idempotent sink — self-checking. | `videoflow deploy toy_router.py` |
 
 Each asks for its inputs the first time, writes a `config.yaml`, builds and loads
 its image, provisions a dev broker, runs, and tears down. See each solution's
 README for its configuration reference.
 
-The three `toy_*` solutions need no models, no footage and no dependencies
-beyond the videoflow base image — together they exercise most of the framework
-(the node types, both flow types, both join modes, replication and partitioned
-routing, lifecycle hooks, metadata and idempotent consumers, the prep hook).
-Deploy one in seconds to prove your cluster and pipeline work before spending
-minutes on an ML solution — and since they import no `videoflow_contrib`
-packages, they are the only solutions that also work with
-`videoflow run-local` straight from a checkout.
+> **Looking for the toy solutions?** `toy_calculator`, `toy_fusion` and
+> `toy_router` moved to the core repo:
+> [videoflow/solutions](https://github.com/videoflow/videoflow/tree/master/solutions),
+> where they also serve as its end-to-end test suite. They need no models, no
+> footage and no dependencies beyond the videoflow base image, and together they
+> exercise most of the framework (the node types, both flow types, both join
+> modes, replication and partitioned routing, lifecycle hooks, metadata and
+> idempotent consumers, the prep hook). Deploy one in seconds to prove your
+> cluster works before spending minutes on an ML solution.
 
 ## Writing a solution (a deployable graph)
 
 A *solution* is an end-to-end flow that wires components together — see the table
-above, with [solutions/offside](solutions/offside) as the fullest example and the
-`toy_*` solutions as the smallest complete ones ([toy_calculator](solutions/toy_calculator)
-is the place to start reading).
+above, with [solutions/offside](solutions/offside) as the fullest example. The
+smallest complete one is
+[toy_calculator](https://github.com/videoflow/videoflow/tree/master/solutions/toy_calculator)
+in the core repo; it is the place to start reading.
 Solutions live under `solutions/<name>/` and follow a file convention that
 `videoflow deploy` understands; every file beyond the graph module is optional,
 and each one you add removes a manual step from deployment.

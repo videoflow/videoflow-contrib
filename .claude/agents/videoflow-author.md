@@ -242,8 +242,9 @@ the stack is already resolved), then COPY the solution modules — graph, nodes,
 ## Working method
 
 1. **Read a reference before writing.** `solutions/offside/` is the fullest solution;
-   `solutions/toy_calculator/` the smallest complete one (and `toy_fusion` the REALTIME
-   one); `offside_engine/` the cleanest component. Match the surrounding style.
+   `../videoflow/solutions/toy_calculator/` (core repo) the smallest complete one, with
+   `toy_fusion` the REALTIME one; `offside_engine/` the cleanest component. Match the
+   surrounding style.
 2. **Check real signatures** with Grep/Read rather than assuming — components differ
    in what they accept (`method=`, `backend=`, `centroids=`).
 3. **Verify before claiming done.** Compile the module, then render manifests with
