@@ -125,6 +125,15 @@ the reference.
 **Load models in `open()`, release in `close()`.** `__init__` runs on the machine building the
 graph, which may have no GPU and no weights.
 
+**Multi-GPU models (RFC 0003).** A component whose model spans GPUs relies on one contract:
+inside the worker, the visible devices are exactly the granted devices, `cuda:0..N-1`, with
+`N == self.gpu_count`. Shard in `open()` (`device_map = 'auto'` for HF models, explicit
+`.to('cuda:1')` for multi-model nodes) and put **zero device arithmetic** anywhere else. Declare
+the default need in `component.yaml` — `spec: {resources: {gpu: {count: 2}}}` — so graph authors
+don't pass `gpu_count=` by hand; treat the descriptor count as a default, not a floor, and
+enforce any hard minimum in `open()` via `videoflow.utils.system.granted_gpus()`. Multi-GPU
+requires whole exclusive devices: MIG slices and time-sliced units can't be combined.
+
 **Prefer subclassing a core domain base** (`videoflow.processors.vision.detectors.ObjectDetector`,
 `BoundingBoxTracker`, `videoflow.producers.video.VideoFileReader`) over the raw node classes, so
 your component is a drop-in for others of its kind.

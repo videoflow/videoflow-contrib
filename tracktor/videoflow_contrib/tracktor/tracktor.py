@@ -45,7 +45,10 @@ class TracktorFromFrames(OneTaskProcessorNode):
             torch.load(detection_model_path, map_location = lambda storage, loc: storage)
         )
         obj_detect.eval()
-        obj_detect.cuda()
+        # Two models, one device each when granted (RFC 0003): with gpu_count = 2
+        # the detector takes cuda:0 and the reid network cuda:1; with the default
+        # single grant both land on cuda:0 exactly as before.
+        obj_detect.cuda(0)
 
         #2. Load re-identification model
         reid_model_path = get_file('reid.pkl', URL_REID_MODEL)
@@ -54,7 +57,7 @@ class TracktorFromFrames(OneTaskProcessorNode):
             torch.load(reid_model_path, map_location = lambda storage, loc: storage)
         )
         reid_network.eval()
-        reid_network.cuda()
+        reid_network.cuda(min(1, self.gpu_count - 1))
 
         #3. Creater tracker
         self._tracker = Tracker(
@@ -141,7 +144,9 @@ class TracktorFromBoxes(OneTaskProcessorNode):
             torch.load(detection_model_path, map_location = lambda storage, loc: storage)
         )
         obj_detect.eval()
-        obj_detect.cuda()
+        # Same two-model placement as TracktorFromFrames: detector on cuda:0,
+        # reid on cuda:1 when gpu_count = 2 (RFC 0003), both on cuda:0 otherwise.
+        obj_detect.cuda(0)
 
         #1. Load re-identification model
         reid_model_path = get_file('reid.pkl', URL_REID_MODEL)
@@ -150,7 +155,7 @@ class TracktorFromBoxes(OneTaskProcessorNode):
             torch.load(reid_model_path, map_location = lambda storage, loc: storage)
         )
         reid_network.eval()
-        reid_network.cuda()
+        reid_network.cuda(min(1, self.gpu_count - 1))
 
         #2. Create tracker
         self._tracker = Tracker(
