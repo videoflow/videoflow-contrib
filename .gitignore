@@ -11,8 +11,9 @@ __pycache__/
 # absolute paths. config.example.yaml and config.template.yaml are the tracked ones.
 solutions/*/config.yaml
 
-# Folder with models downloaded
+# Folder with models and data downloaded
 models/
+solutions_output/
 
 # Folder with files to include in different
 # release versions

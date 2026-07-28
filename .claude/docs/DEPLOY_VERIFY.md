@@ -88,9 +88,10 @@ from the contrib repo root (solution Dockerfiles COPY sibling sub-packages):
 
 ```bash
 cd /home/jadiel/workspace/videoflow-contrib
-docker build -f solutions/offside/gpu.Dockerfile      -t videoflow-offside:r1          .
-docker build -f solutions/human_tracking/Dockerfile   -t videoflow-human-tracking:r1   .
-docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-face-obfuscation:r1 .
+docker build -f solutions/offside/gpu.Dockerfile          -t videoflow-offside:r1          .
+docker build -f solutions/human_tracking/Dockerfile       -t videoflow-human-tracking:r1   .
+docker build -f solutions/face_obfuscation/Dockerfile     -t videoflow-face-obfuscation:r1 .
+docker build -f solutions/video_captioning/gpu.Dockerfile -t videoflow-video-captioning:r1 .
 
 # Smoke-test CUDA in the GPU image now, not inside a worker pod 40 minutes later.
 docker run --rm --gpus all videoflow-offside:r1 \
@@ -201,7 +202,8 @@ Use `work_dir: ./out_nocommit` throughout: `*_nocommit*` is gitignored, so artif
 root-owned container output stay out of `git status`.
 
 Order: **toys first** (seconds per iteration, no weights, no network, and they run-local on the
-host before any image exists), then the CPU ML solutions, then `offside`.
+host before any image exists), then the CPU ML solutions, then the GPU ones — `video_captioning`
+before `offside`, since it is a single-node graph and its only cluster risk is the GPU grant.
 
 The three toy recipes below are for solutions in the **core** repo — run them from
 `/home/jadiel/workspace/videoflow/solutions/<name>/`, not from this one.
@@ -350,6 +352,48 @@ tracker: {min_height: 0, max_cosine_distance: 0.2, nn_budget: null}
 
 Success artifact: `out_nocommit/annotated_video.avi`, non-empty, fresh mtime.
 
+### `video_captioning` — the multi-GPU one
+
+A VLM captions sampled frames and the sinks write an `.srt`/`.vtt` subtitle track. Its interest
+here is **RFC 0003**: `captioner.gpu_count` whole devices per replica, total demand
+`workers × gpu_count`. Build with `gpu.Dockerfile`.
+
+Two things gate it before the cluster, and both cost more than the deploy does:
+
+- **The weights.** `prepare.py` calls `snapshot_download`, and the default Qwen2.5-VL-7B is
+  ~16GB. Warm `~/.cache/huggingface` on the host **once, outside the deploy**, then run with
+  `--no-prepare` — the `x-mounts` entry maps that directory into the pods. A cold cache inside a
+  prep container is a very slow, very repeatable way to fail.
+- **`gpu_count: 2` cannot work on this machine.** The node's 4 GPUs are **time-sliced from one
+  physical card**, and a sharded model needs whole exclusive devices. Use `gpu_count: 1` with a
+  3B model here; `gpu_count: 2` is for a real multi-card node.
+
+```yaml
+# solutions/video_captioning/config.yaml
+work_dir: ./out_nocommit
+input_video: /home/jadiel/workspace/videoflow-contrib/solutions/human_tracking/out_nocommit/people_walking.mp4
+output_basename: captions
+every_n_frames: 60
+max_captions: 5          # bound the first run; -1 is an overnight job on real footage
+device: gpu
+flow_type: batch
+cues: {min_seconds: 1.0, max_seconds: 5.0}
+captioner: {model_id: Qwen/Qwen2.5-VL-3B-Instruct, prompt: Describe this image in one sentence., max_new_tokens: 64, workers: 1, gpu_count: 1}
+join: {timeout_s: null, missing: wait, max_pending: 100000}
+```
+
+Success artifact: `out_nocommit/captions.srt`, non-empty, fresh mtime, and
+
+```bash
+python3 -c "
+import sys; t=open('solutions/video_captioning/out_nocommit/captions.srt').read()
+n=t.count(' --> '); print(f'{n} cues'); assert n > 0"
+```
+
+`captions.jsonl` is written line-by-line as captions land, so it is the live progress view while
+the run is in flight — the `.srt` only appears at `close()`. An empty `.srt` with a populated
+`.jsonl` means the `subtitles` worker died before end-of-stream; check its pod, not the graph.
+
 ### `offside` — the GPU one, and the most likely to fail
 
 Three cameras, a multi-parent join, and the only GPU demand: **3** — one detector per camera, with
@@ -403,6 +447,7 @@ the first run pays the download and a dead mirror is an infra blocker.
 | `toy_fusion` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
 | `face_obfuscation` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
 | `human_tracking` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
+| `video_captioning` | contrib | `gpu.Dockerfile` | `workers × gpu_count` (use 1 here) | `out_nocommit/captions.srt` with at least one cue |
 | `offside` | contrib | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
 
 ## Deploy

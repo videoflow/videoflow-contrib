@@ -1,0 +1,8 @@
+# torch is installed via the PyTorch CPU index in the Dockerfile — PyPI's default
+# linux torch wheel bundles CUDA and is ~2.5GB, which a CPU image has no use for.
+# The Hugging Face stack rides on whichever torch is already installed.
+transformers>=4.49,<5      # Qwen2.5-VL support landed in 4.49
+accelerate>=1.2            # device_map='auto' sharding
+huggingface-hub>=0.24      # snapshot_download + huggingface_hub.errors (prepare.py)
+pillow>=10.0
+pyyaml>=6.0

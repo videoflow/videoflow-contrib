@@ -74,6 +74,7 @@ command from its own directory:
 | [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow deploy face_obfuscation.py` |
 | [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow deploy human_tracking.py` |
 | [offside](solutions/offside) | Multi-camera FIFA-style semi-automated offside detection. | `videoflow deploy offside.py` |
+| [video_captioning](solutions/video_captioning) | Captions a video with a vision-language model and writes an `.srt`/`.vtt` subtitle track. The multi-GPU reference deployment (RFC 0003). | `videoflow deploy video_captioning.py` |
 
 Each asks for its inputs the first time, writes a `config.yaml`, builds and loads
 its image, provisions a dev broker, runs, and tears down. See each solution's

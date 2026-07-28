@@ -1,0 +1,79 @@
+# Video-captioning config. Copy to config.yaml and edit, or let
+# `videoflow deploy video_captioning.py` generate one by asking for the values.
+# Relative paths resolve against THIS file's directory.
+
+# Where outputs go. Mounted into the pods, so captions.srt / .vtt / .jsonl land
+# here on this machine.
+work_dir: ./out
+
+# The video to caption (required).
+input_video: /data/video.mp4
+
+# Filename stem for the artifacts: <stem>.srt, <stem>.vtt and <stem>.jsonl inside
+# work_dir. A bare stem — no directory, no extension.
+output_basename: captions
+
+# Caption one frame out of every N. This is the knob that decides what the run
+# costs: a VLM needs seconds per frame, so 60 (about one caption per 2s of 30fps
+# footage) is already a caption every few seconds of wall clock. Lower it for a
+# denser track, raise it for a long film.
+every_n_frames: 60
+
+# Stop after this many captions; -1 captions the whole video. Bounding the
+# caption count is how you bound the runtime — it is unrelated to the length of
+# the source. Useful for a first smoke run against real footage.
+max_captions: -1
+
+# 'gpu' or 'cpu' — sets device_type on the captioner node. 'gpu' requires the GPU
+# image (gpu.Dockerfile) and GPU nodes in the cluster. 'cpu' works and is
+# extremely slow; it exists so the pipeline is testable without an accelerator,
+# and it requires captioner.gpu_count: 1.
+device: gpu
+
+# 'batch' for recorded files: loss-free, backpressured, runs to completion — and
+# what you want, because a subtitle track with holes in it is not a subtitle
+# track. 'realtime' only for a genuine live source (frames may be dropped).
+flow_type: batch
+
+# How long each caption stays on screen. A cue normally runs until the next one
+# starts; max_seconds stops the final cue (and any cue before a gap) hanging
+# there, min_seconds keeps a dense stride readable. min_seconds may overlap the
+# next cue — every player tolerates that.
+cues:
+  min_seconds: 1.0
+  max_seconds: 5.0
+
+captioner:
+  # Any Hugging Face image-text-to-text model. prepare.py caches it before the
+  # flow runs; the captioner loads it with device_map='auto'.
+  model_id: Qwen/Qwen2.5-VL-7B-Instruct
+
+  # The instruction sent with every frame. This is the whole "what kind of
+  # captions do I get" control — e.g. 'Describe what the people in this image
+  # are doing, in one sentence.' or 'List the objects visible in this image.'
+  prompt: Describe this image in one sentence.
+
+  # Generation budget per caption. Subtitle lines want to be short; raising this
+  # mostly buys longer sentences and a slower run.
+  max_new_tokens: 64
+
+  # Competing replicas of the captioner. The node is stateless, so replicas just
+  # take the next frame each — this is the throughput knob. Total GPU demand is
+  # workers x gpu_count, so 2 workers of 2 GPUs claims 4 whole devices.
+  workers: 1
+
+  # Whole GPUs each replica is granted (RFC 0003). The 7B default does not fit
+  # one small card in bf16, so the model is sharded across 2; a quantized or
+  # smaller model (e.g. Qwen/Qwen2.5-VL-3B-Instruct) runs on 1. Must be 1 when
+  # device is cpu. Multi-GPU grants need whole exclusive devices — MIG slices and
+  # time-sliced units cannot be combined.
+  gpu_count: 2
+
+# The join that pairs each caption back with its frame's timestamp. The cue
+# branch runs the entire video ahead of the model, so nearly every sampled frame
+# is an open group at once and max_pending must exceed the caption count —
+# the policy default (256) would silently evict, i.e. lose captions.
+join:
+  timeout_s: null     # null: wait indefinitely for the model to catch up
+  missing: wait       # wait | drop | error, for a group that never completes
+  max_pending: 100000

@@ -1,0 +1,66 @@
+# Video-captioning config template. `videoflow deploy video_captioning.py` reads
+# this when no config.yaml exists: it asks the x-questions below, writes
+# config.yaml, and hostPath-mounts the x-mounts paths into the prep container and
+# the worker pods. See config.example.yaml for what every knob means.
+work_dir: ./out
+input_video: null
+output_basename: captions
+every_n_frames: 60
+max_captions: -1
+device: gpu
+flow_type: batch
+cues:
+  min_seconds: 1.0
+  max_seconds: 5.0
+captioner:
+  model_id: Qwen/Qwen2.5-VL-7B-Instruct
+  prompt: Describe this image in one sentence.
+  max_new_tokens: 64
+  workers: 1
+  gpu_count: 2
+join:
+  timeout_s: null
+  missing: wait
+  max_pending: 100000
+
+# Inputs `videoflow deploy` asks for when generating config.yaml.
+x-questions:
+  - key: input_video
+    prompt: 'Path to the video to caption'
+    type: path
+  - key: every_n_frames
+    prompt: 'Caption one frame out of every N (60 is about one caption per 2s of 30fps footage)'
+    type: int
+    default: 60
+  - key: max_captions
+    prompt: 'Stop after this many captions (-1 for the whole video)'
+    type: int
+    default: -1
+  - key: captioner.prompt
+    prompt: 'Instruction sent to the model with every frame'
+    type: str
+    default: Describe this image in one sentence.
+  - key: device
+    prompt: 'Run the captioner on'
+    type: choice
+    choices: [gpu, cpu]
+    default: gpu
+  - key: captioner.gpu_count
+    prompt: 'Whole GPUs to shard the model across (1 for a small or quantized model; must be 1 on cpu)'
+    type: int
+    default: 2
+  - key: flow_type
+    prompt: 'Flow type (batch = recorded file, realtime = live source)'
+    type: choice
+    choices: [batch, realtime]
+    default: batch
+
+# Paths that must be visible inside prep containers and worker pods: the input
+# video (read-only) and the work dir at the same absolute location, plus the
+# operator's Hugging Face cache mapped onto the container root's — that is where
+# prepare.py puts the model weights and where the captioner's open() looks for
+# them, so without it every replica re-downloads tens of GB.
+x-mounts:
+  - '{input_video}:ro'
+  - '{work_dir}'
+  - '~/.cache/huggingface:/root/.cache/huggingface'

@@ -44,6 +44,15 @@ exclusive devices — MIG slices and time-sliced units cannot be combined.
 `device_type = CPU` loads the model on CPU in float32. It works (slowly) and
 exists mainly so the CPU image stays testable.
 
+## In a graph
+
+[`solutions/video_captioning`](../solutions/video_captioning) is the end-to-end
+deployment: it samples frames off a video, captions them with this component and
+writes an `.srt`/`.vtt` subtitle track. Read it for the two things a graph around
+this component has to get right — sampling in the **producer** (a downstream
+filter cannot drop frames), and giving the join that re-pairs captions with
+timestamps a pending budget larger than the caption count.
+
 ## Parameters
 
 | Param | Default | Meaning |
