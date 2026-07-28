@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import torch
+from videoflow.core.errors import WORKER_FATAL, register_classifier_for
 from videoflow.core.node import OneTaskProcessorNode
 from videoflow.utils.downloader import get_file
 
@@ -10,6 +11,14 @@ from .tracker import Tracker
 
 URL_DETECTION_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/detection.pth'
 URL_REID_MODEL = 'https://github.com/videoflow/videoflow-contrib/releases/download/tracktor/reid.pth'
+
+# A component cannot subclass torch's CUDA out-of-memory error, so videoflow is
+# told about it instead: an OOM is a property of this worker, never of the frame
+# it was holding. These nodes are GPU-only and hold two models, so the mapping is
+# what stops one wedged pod from dead-lettering a healthy stream a frame at a time
+# — the frame goes back to the broker untouched and the worker stops.
+register_classifier_for('torch.cuda.OutOfMemoryError', WORKER_FATAL,
+                        lambda: getattr(torch.cuda, 'OutOfMemoryError', None))
 
 class TracktorFromFrames(OneTaskProcessorNode):
     '''

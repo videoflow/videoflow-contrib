@@ -13,9 +13,40 @@ import json
 
 import numpy as np
 from videoflow.core.constants import CPU
+from videoflow.core.errors import (
+    WORKER_FATAL,
+    ConfigError,
+    SchemaError,
+    register_classifier_for,
+)
 from videoflow.core.node import ProcessorNode
 
 from . import fitting
+
+_torch_classifiers_registered = False
+
+
+def _torch_oom_type() -> type | None:
+    import torch  # lazy: only the siglip path pulls torch in at all
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+
+def _register_torch_classifiers() -> None:
+    '''
+    Maps torch's CUDA out-of-memory error onto ``worker_fatal``, for the siglip
+    embedding path (the default HSV path is pure numpy and never sees torch).
+
+    A component cannot subclass ``torch.cuda.OutOfMemoryError``, so videoflow is
+    told about it instead — from ``open()``, since torch must not be a
+    module-scope import here. An OOM belongs to this worker, not to the frame it
+    was holding, and the mapping is what keeps the frame out of the dead-letter
+    queue.
+    '''
+    global _torch_classifiers_registered
+    if _torch_classifiers_registered:
+        return
+    _torch_classifiers_registered = register_classifier_for(
+        'torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
 
 
 class TeamClassifier(ProcessorNode):
@@ -40,11 +71,24 @@ class TeamClassifier(ProcessorNode):
     def open(self):
         if self._centroids is None:
             if not self._centroids_path:
-                raise ValueError('TeamClassifier needs centroids or centroids_path')
+                raise ConfigError(
+                    'TeamClassifier was given neither centroids nor centroids_path.',
+                    remedy = 'Pass the inline centroids dict from fit_teams, or a '
+                            'centroids_path pointing at the teams.json it wrote.',
+                    node = self.name)
             with open(self._centroids_path) as f:
                 self._centroids = json.load(f)
         self._method = self._centroids.get('method', self._method)
+        # Checked here rather than on the first frame: a method the embedder does
+        # not know is a config mistake, and finding it at worker start is one
+        # failure instead of one per message.
+        if self._method not in fitting.METHODS:
+            raise ConfigError(
+                f'TeamClassifier got method {self._method!r}.',
+                remedy = f'Use one of: {", ".join(fitting.METHODS)}.',
+                node = self.name, method = self._method)
         if self._method == 'siglip':
+            _register_torch_classifiers()
             from transformers import AutoModel, AutoProcessor
             proc = AutoProcessor.from_pretrained(self._siglip_model)
             net = AutoModel.from_pretrained(self._siglip_model)
@@ -54,7 +98,17 @@ class TeamClassifier(ProcessorNode):
         if isinstance(frame, tuple):
             frame = frame[1]
         frame = np.asarray(frame)
-        tr = np.asarray(tracks, dtype=np.float64).reshape(-1, 5)
+        # A track array of the wrong shape fails identically on every redelivery,
+        # so it is dead-lettered on the first failure rather than retried to the
+        # end of the budget under a bare numpy reshape error.
+        try:
+            tr = np.asarray(tracks, dtype=np.float64).reshape(-1, 5)
+        except (TypeError, ValueError) as e:
+            raise SchemaError(
+                f'expected an (N, 5) [ymin,xmin,ymax,xmax,track_id] array: {e}',
+                remedy = 'Check the tracker feeding this classifier emits the '
+                        'y-first 5-column format.',
+                node = self.name) from e
         out = np.full((len(tr), 2), [-1.0, 0.0])
         if len(tr) == 0:
             return out

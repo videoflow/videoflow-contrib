@@ -304,8 +304,9 @@ moments emit at quorum (`views < expected_views`), which is correct behaviour, n
 The cheapest target: CPU only, one input, no prep beyond a weights fetch. The best first proof
 that the framework path works end to end. Build with the **CPU** `Dockerfile`; GPU demand 0.
 
-`load_config` raises `ValueError("config must set 'input_video'")` — there is no bundled default —
-and `output_video` **must end in `.avi`** (`VideofileWriter` supports nothing else).
+`load_config` raises `ConfigError` (`VF_CONFIG`, exit 2) if `input_video` is unset — there is no
+bundled default — and `output_video` **must end in `.avi`** (`VideofileWriter` supports nothing
+else). Both print the fix under the message rather than a traceback.
 
 ```yaml
 # solutions/face_obfuscation/config.yaml
@@ -457,6 +458,9 @@ kubectl get pods -n videoflow -l videoflow.io/run-id=<run> -o wide
 kubectl logs -n videoflow -l videoflow.io/run-id=<run> --tail=200 --all-containers --prefix
 kubectl describe pod <pod> -n videoflow            # names Pending / ImagePull reasons directly
 videoflow debug decode --dlq --flow-id <flow> --run-id <run> --nats <url> --limit 20
+
+videoflow dlq ls --flow-id <flow>                  # triage: dead letters grouped by code
+videoflow dlq show --flow-id <flow> --id 3         # one entry, payload included
 ```
 
 Every resource carries `videoflow.io/flow-id`, `videoflow.io/run-id` and `videoflow.io/node`, so
@@ -465,7 +469,21 @@ those selectors scope cleanly to one run.
 Health, on container port 8080: `/readyz` returns 200 only after the node's `open()` returns — a
 pod stuck not-ready means `open()` is hanging or failing. `/healthz` goes 503 after 60s without a
 beat. `/metrics` carries `videoflow_messages_{published,received,processed,failed}_total{node=…}`,
-which is how you tell a flow that is working from one that is merely up.
+which is how you tell a flow that is working from one that is merely up, plus
+`videoflow_errors_total{node,code,disposition}`, which is how you tell *what* is failing.
+
+**Triage failures by code, not by log volume.** `videoflow dlq ls` groups by the stable code,
+which is the question you actually have:
+
+| What you see | What it means | Where the fix is |
+|---|---|---|
+| exit 2 / `VF_CONFIG`, `VF_CAPABILITY` | a node param or the config is wrong | this repo — the graph or `config.yaml` |
+| exit 3 / `VF_RESOURCE_UNAVAILABLE`, `VF_CLUSTER` | the world is wrong | the cluster, the footage, the registry |
+| many `VF_POISON_SCHEMA` from one node | its upstream is emitting the wrong shape | the producing component's output contract |
+| any `VF_DEVICE` / `VF_RESOURCE_EXHAUSTED` | a sick worker, not bad data | GPU sizing — and check the component registered a classifier for its framework's OOM type |
+
+A stream of dead letters whose code has nothing to do with their payloads is the signature of a
+missing classifier registration: the failure is being read as transient and retried into the DLQ.
 
 ## Teardown
 

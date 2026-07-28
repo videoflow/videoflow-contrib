@@ -1,4 +1,5 @@
 import numpy as np
+from videoflow.core.errors import ConfigError
 
 
 def _pdist(a, b):
@@ -112,8 +113,8 @@ class NearestNeighborDistanceMetric(object):
         elif metric == "cosine":
             self._metric = _nn_cosine_distance
         else:
-            raise ValueError(
-                "Invalid metric; must be either 'euclidean' or 'cosine'")
+            raise ConfigError(f'unknown distance metric {metric!r}.',
+                            remedy = "Use 'euclidean' or 'cosine'.", metric = metric)
         self.matching_threshold = matching_threshold
         self.budget = budget
         self.samples = {}

@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from videoflow.core.errors import CapabilityError, ConfigError
 from videoflow.utils.downloader import get_file
 
 from .model import PitchModel
@@ -61,9 +62,15 @@ class PitchLandmarkDetector:
             path = self._weights or get_file(name, url)
             self._model = YOLO(path)
         elif self._backend == 'pnlcalib':
-            raise NotImplementedError('pnlcalib backend pending license clearance; use yolo32')
+            # Declared but deliberately not wired up — the component declining to
+            # do something, which is what CapabilityError says.
+            raise CapabilityError(
+                'the pnlcalib backend is pending license clearance and is not wired up.',
+                remedy = "Use backend='yolo32'.", backend = self._backend)
         else:
-            raise ValueError(f'unknown backend {self._backend!r}')
+            raise ConfigError(
+                f'PitchLandmarkDetector got backend {self._backend!r}.',
+                remedy = "Use one of: yolo32, pnlcalib.", backend = self._backend)
 
     def detect(self, frame_bgr: np.ndarray) -> np.ndarray:
         '''Return (K, 3) [x, y, conf] in canonical landmark order.'''

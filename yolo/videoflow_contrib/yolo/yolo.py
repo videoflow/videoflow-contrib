@@ -21,12 +21,23 @@ from PIL import Image
 tf.disable_v2_behavior()
 from tf_keras import backend as K
 from tf_keras.models import load_model
+from videoflow.core.errors import TRANSIENT, WORKER_FATAL, register_error_classifier
 from videoflow.core.node import ProcessorNode
 from videoflow.utils.downloader import get_file
 
 from .yolo3 import preprocessing
 from .yolo3.model import yolo_eval
 from .yolo3.utils import letterbox_image
+
+# Tensorflow raises its own exception hierarchy, which a component cannot subclass,
+# so the unambiguous cases are mapped onto videoflow dispositions here, on import.
+# ResourceExhausted means the device is out of memory: the frame is fine, this
+# worker is not, so it is handed back rather than dead-lettered under someone
+# else's fault. InvalidArgumentError is deliberately not mapped — it means a bad
+# input shape as often as a bad graph.
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+register_error_classifier(tf.errors.UnavailableError, TRANSIENT)
+register_error_classifier(tf.errors.DeadlineExceededError, TRANSIENT)
 
 
 class YOLO(ProcessorNode):

@@ -14,10 +14,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 
 import cv2
 import numpy as np
 from common import load_config
+from videoflow.core.errors import ResourceUnavailable, VideoflowError
 from videoflow_contrib.offside_visualizer.drawing import project_world_points
 from videoflow_contrib.pitch_calib import PitchLandmarkDetector, PitchModel, solve_camera
 
@@ -100,7 +102,11 @@ def calibrate_camera(cfg, cam, manual=False):
     pitch = PitchModel(cfg.pitch_length, cfg.pitch_width)
     frames = sample_frames(cfg.videos[cam], N_SAMPLES)
     if not frames:
-        raise RuntimeError(f'no frames read from {cfg.videos[cam]}')
+        raise ResourceUnavailable(
+            f'no frames could be read from {cfg.videos[cam]}',
+            remedy = 'Check the path exists and that opencv can decode this '
+                    'container (try `ffprobe` on it).',
+            camera = cam, video = cfg.videos[cam])
     h, w = frames[0].shape[:2]
 
     if manual:
@@ -125,18 +131,27 @@ def calibrate_camera(cfg, cam, manual=False):
     print(f'{cam}: RMS {calib["rms_px"]:.2f} px  ({calib["n_landmarks"]} landmarks)  [{status}]')
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', required=True)
     ap.add_argument('--cam', default=None, help='calibrate a single camera')
     ap.add_argument('--manual', action='store_true', help='manual click calibration')
     args = ap.parse_args()
-    cfg = load_config(args.config)
-    cams = [args.cam] if args.cam else cfg.cameras
-    for cam in cams:
-        calibrate_camera(cfg, cam, manual=args.manual)
+    # A typed failure prints as message + fix and exits with the code its class
+    # carries (2 = your config, 3 = the world), the same contract the videoflow
+    # CLI honours — prepare.py and CI both read that status.
+    try:
+        cfg = load_config(args.config)
+        cams = [args.cam] if args.cam else cfg.cameras
+        for cam in cams:
+            calibrate_camera(cfg, cam, manual=args.manual)
+    except VideoflowError as e:
+        print(f'{e.code}: {e.message}' + (f'\n  {e.remedy}' if e.remedy else ''),
+              file=sys.stderr)
+        return e.exit_code
     print(f'\nWrote calibration to {cfg.calib_dir()}')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

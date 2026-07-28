@@ -17,6 +17,7 @@ uses scipy (and scipy's Rotation for the rotation-vector parametrization).
 from __future__ import annotations
 
 import numpy as np
+from videoflow.core.errors import SchemaError
 
 __all__ = ['homography_dlt', 'intrinsics_from_homography', 'extrinsics_from_homography',
            'solve_camera']
@@ -41,7 +42,12 @@ def homography_dlt(world_xy: np.ndarray, img_xy: np.ndarray) -> np.ndarray:
     img_xy = np.asarray(img_xy, dtype=np.float64).reshape(-1, 2)
     n = world_xy.shape[0]
     if n < 4:
-        raise ValueError(f'homography needs >= 4 correspondences, got {n}')
+        # Poison rather than transient: too few correspondences is a property of
+        # the observations themselves, so the same input fails the same way on
+        # every retry.
+        raise SchemaError(f'homography needs >= 4 correspondences, got {n}',
+                        remedy = 'Sample a frame where more pitch landmarks are '
+                                'visible, or calibrate manually.')
     Tw = _normalization_matrix(world_xy)
     Ti = _normalization_matrix(img_xy)
     wn = (np.c_[world_xy, np.ones(n)] @ Tw.T)[:, :2]
@@ -142,14 +148,21 @@ def solve_camera(observations: dict, pitch_model, image_size: tuple[int, int],
         - weights: optional ``{name: w}`` confidence weights for refinement.
     - Returns: calib dict ``{image_size, K, dist, R, rvec, t, C, rms_px,
       n_landmarks, per_landmark_residuals}``.
-    - Raises: ValueError if fewer than ``min_landmarks`` usable correspondences.
+    - Raises: SchemaError (``VF_POISON_SCHEMA``) if fewer than ``min_landmarks``
+      usable correspondences. Poison, not transient: the same observations
+      produce the same shortfall on every retry.
     '''
     # Look up world coordinates from either the descriptive landmarks or the
     # roboflow-32 vertices (what the yolo32 detector emits).
     world_all = {**pitch_model.keypoints(), **pitch_model.roboflow32_keypoints()}
     names = [n for n in observations if n in world_all and np.all(np.isfinite(observations[n]))]
     if len(names) < min_landmarks:
-        raise ValueError(f'need >= {min_landmarks} landmarks, got {len(names)}')
+        raise SchemaError(
+            f'need >= {min_landmarks} landmarks, got {len(names)}',
+            remedy = 'Sample a frame with more of the pitch visible, lower the '
+                    'detector conf threshold, or calibrate manually '
+                    '(calibrate.py --manual).',
+            landmarks = len(names), min_landmarks = min_landmarks)
     world_xyz = np.stack([world_all[n] for n in names], axis=0)
     world_xy = world_xyz[:, :2]
     img_xy = np.stack([np.asarray(observations[n], dtype=np.float64) for n in names], axis=0)

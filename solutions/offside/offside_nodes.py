@@ -16,7 +16,27 @@ from __future__ import annotations
 import json
 
 import numpy as np
+from videoflow.core.errors import SchemaError
 from videoflow.core.node import ConsumerNode, ProcessorNode
+
+
+def _as_detections(dets, node: str) -> np.ndarray:
+    '''
+    The (N, 6) detection array the detector's contract promises.
+
+    A payload that is not one fails identically however many times it is
+    redelivered, so it is poison: dead-lettered on the first failure carrying the
+    node name and the shape, rather than retried to the end of the budget and
+    then dead-lettered anyway under a numpy reshape error that names neither.
+    '''
+    try:
+        return np.asarray(dets, dtype=np.float64).reshape(-1, 6)
+    except (TypeError, ValueError) as e:
+        raise SchemaError(
+            f'expected an (N, 6) [ymin,xmin,ymax,xmax,class,score] array: {e}',
+            remedy = 'Check the detector upstream of this node emits the y-first '
+                    '6-column format.',
+            node = node) from e
 
 
 class FrameIndexSplitter(ProcessorNode):
@@ -29,7 +49,7 @@ class PersonBoxes(ProcessorNode):
     '''Keep player/GK/referee detections (classes 0,1,2) as (M,6)
     [ymin,xmin,ymax,xmax,class,score] — the tracker needs the class for BoxMOT.'''
     def process(self, dets):
-        dets = np.asarray(dets, dtype=np.float64).reshape(-1, 6)
+        dets = _as_detections(dets, self.name)
         if len(dets) == 0:
             return np.empty((0, 6))
         keep = np.isin(dets[:, 4].astype(int), [0, 1, 2])
@@ -39,7 +59,7 @@ class PersonBoxes(ProcessorNode):
 class BallPick(ProcessorNode):
     '''Highest-score ball detection (class 3) → {'yx':[y,x],'score'} or None.'''
     def process(self, dets):
-        dets = np.asarray(dets, dtype=np.float64).reshape(-1, 6)
+        dets = _as_detections(dets, self.name)
         balls = dets[dets[:, 4].astype(int) == 3]
         if len(balls) == 0:
             return None

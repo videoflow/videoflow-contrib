@@ -17,6 +17,12 @@ from typing import Any
 
 import numpy as np
 from videoflow.core.constants import GPU
+from videoflow.core.errors import (
+    WORKER_FATAL,
+    ConfigError,
+    SchemaError,
+    register_classifier_for,
+)
 from videoflow.processors.vision.detectors import ObjectDetector
 from videoflow.utils.downloader import get_file
 
@@ -38,6 +44,34 @@ _YOLO_WEIGHTS = (_YOLO_FNAME,
                   BASE_URL + _YOLO_FNAME])
 # Canonical class ids the rest of the pipeline expects.
 PLAYER, GOALKEEPER, REFEREE, BALL = 0, 1, 2, 3
+BACKENDS = ('rfdetr', 'yolo')
+
+_torch_classifiers_registered = False
+
+
+def _torch_oom_type() -> type | None:
+    import torch  # lazy: the ML stack stays out of module scope (see the docstring)
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+
+def _register_torch_classifiers() -> None:
+    '''
+    Maps torch's CUDA out-of-memory error onto the ``worker_fatal`` disposition.
+
+    A component cannot subclass ``torch.cuda.OutOfMemoryError``, so videoflow is
+    told about it instead. This runs from ``open()`` rather than at module scope
+    because torch is deliberately not imported here until the model loads.
+
+    It matters more than it looks: without the mapping a wedged GPU reads as an
+    ordinary transient failure, and one sick pod moves an entire healthy stream
+    into the dead-letter queue a frame at a time. With it the frame is handed
+    back untouched and the worker stops, so a replacement takes over.
+    '''
+    global _torch_classifiers_registered
+    if _torch_classifiers_registered:
+        return
+    _torch_classifiers_registered = register_classifier_for(
+        'torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
 
 
 class SoccerDetector(ObjectDetector):
@@ -77,6 +111,12 @@ class SoccerDetector(ObjectDetector):
         super().__init__(nb_tasks=nb_tasks, device_type=device_type, **kwargs)
 
     def open(self):
+        if self._backend not in BACKENDS:
+            raise ConfigError(
+                f'SoccerDetector got backend {self._backend!r}.',
+                remedy = f'Use one of: {", ".join(BACKENDS)}.',
+                node = self.name, backend = self._backend)
+        _register_torch_classifiers()
         if self._backend == 'yolo':
             from ultralytics import YOLO  # lazy: runs anywhere (torch >= 2.0)
             path = self._checkpoint or get_file(*_YOLO_WEIGHTS)
@@ -106,6 +146,16 @@ class SoccerDetector(ObjectDetector):
         return min(self._conf_person, self._conf_ball)
 
     def _detect(self, im: np.ndarray) -> np.ndarray:
+        # A frame of the wrong rank fails identically however many times it is
+        # retried, so it is poison: dead-lettered on the first failure with the
+        # shape recorded, rather than retried four times into the same queue.
+        if not isinstance(im, np.ndarray) or im.ndim != 3:
+            shape = im.shape if isinstance(im, np.ndarray) else type(im).__name__
+            raise SchemaError(
+                f'expected an (h, w, 3) frame, got {shape}',
+                remedy = 'Unpack the reader tuple, or insert a reshape upstream of '
+                        'this detector.',
+                node = self.name)
         # YOLO (ultralytics) expects BGR; RF-DETR expects RGB. The flip must be a
         # contiguous copy, not a view: rfdetr feeds it to torch.from_numpy, which
         # rejects the negative-stride view a bare im[..., ::-1] produces.

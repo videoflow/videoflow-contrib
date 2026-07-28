@@ -11,8 +11,12 @@ The HSV path is pure (numpy + cv2) and unit-tested; SigLIP is lazy-imported.
 from __future__ import annotations
 
 import numpy as np
+from videoflow.core.errors import ConfigError, NodeContractError
 
 CLASSES = ['team0', 'team1', 'gk', 'referee']
+#: Embedding methods ``embed_crops`` understands. The node validates against this
+#: in ``open()`` so a typo fails at worker start rather than on every frame.
+METHODS = ('hsv', 'siglip')
 _HSV_DIM = 128   # 16 hue × 8 sat bins
 
 
@@ -49,7 +53,8 @@ def embed_crops(crops: list, method: str = 'hsv', model=None) -> np.ndarray:
         return np.array([hsv_embedding(c) for c in crops]) if crops else np.zeros((0, _HSV_DIM))
     if method == 'siglip':
         return _siglip_embed(crops, model)
-    raise ValueError(f'unknown method {method!r}')
+    raise ConfigError(f'unknown embedding method {method!r}.',
+                    remedy = f'Use one of: {", ".join(METHODS)}.', method = method)
 
 
 def fit_teams(embeddings: np.ndarray, det_classes: np.ndarray, method: str = 'hsv') -> dict:
@@ -113,7 +118,10 @@ def assign(embedding: np.ndarray, centroids: dict) -> tuple[int, float]:
 
 def _siglip_embed(crops, model):
     if model is None:
-        raise RuntimeError('SigLIP embedding requested but no model provided')
+        raise NodeContractError(
+            'SigLIP embedding was requested but no model was loaded.',
+            remedy = "Load the (processor, model) pair in the node's open(), or "
+                    "pass method='hsv', which needs no model.")
     import torch
     proc, net = model
     import cv2

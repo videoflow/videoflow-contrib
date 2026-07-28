@@ -7,10 +7,30 @@ import numpy as np
 # disable_v2_behavior() on import to keep graph-mode semantics.
 import tensorflow.compat.v1 as tf
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import (
+    TRANSIENT,
+    WORKER_FATAL,
+    ConfigError,
+    register_error_classifier,
+)
 from videoflow.processors.vision.segmentation import Segmenter
 from videoflow.utils.downloader import get_file
 
 BASE_URL_SEGMENTATION = 'https://github.com/videoflow/videoflow-contrib/releases/download/segmentation_tf/'
+
+# Tensorflow raises its own exception hierarchy, which a component cannot subclass,
+# so the unambiguous cases are mapped onto videoflow dispositions here — on import
+# of the module that owns the tensorflow dependency, so every flow using this
+# component inherits the behaviour without asking for it.
+#
+# ResourceExhausted is the one that matters: it means the device is out of memory.
+# The frame is fine, this worker is not, so it is handed back to the broker for a
+# healthy replica instead of being dead-lettered under someone else's fault.
+# InvalidArgumentError is deliberately NOT mapped: it means a bad input shape as
+# often as it means a bad graph, and guessing wrong dead-letters healthy frames.
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+register_error_classifier(tf.errors.UnavailableError, TRANSIENT)
+register_error_classifier(tf.errors.DeadlineExceededError, TRANSIENT)
 
 def reframe_box_masks_to_image_masks(box_masks, boxes, h, w):
     '''
@@ -113,12 +133,20 @@ class TensorflowSegmenter(Segmenter):
         self._dataset = dataset
 
         if path_to_pb_file is None and (architecture is None or dataset is None):
-            raise ValueError('If path_to_pb_file is None, then architecture and dataset cannot be None')
+            raise ConfigError(
+                'TensorflowSegmenter was given neither path_to_pb_file nor a '
+                'complete (architecture, dataset) pair.',
+                remedy = 'Pass a local path_to_pb_file, or both architecture and '
+                        'dataset from: {}.'.format(', '.join(self.supported_models)))
 
         if path_to_pb_file is None:
             remote_model_id = f'{architecture}_{dataset}'
             if remote_model_id not in self.supported_models:
-                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
+                raise ConfigError(
+                    f'TensorflowSegmenter got model {remote_model_id!r}.',
+                    remedy = 'Use one of: {}, or pass an explicit path_to_pb_file.'.format(
+                        ', '.join(self.supported_models)),
+                    architecture = architecture, dataset = dataset)
             self._remote_model_file_name = f'{architecture}_{dataset}.pb'
 
         self._min_score_threshold = min_score_threshold

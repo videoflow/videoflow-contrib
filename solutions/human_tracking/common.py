@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass, field
 
 import yaml
+from videoflow.core.errors import ConfigError
 
 BASE_URL_EXAMPLES = 'https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/'
 SAMPLE_VIDEO_NAME = 'people_walking.mp4'
@@ -84,16 +85,24 @@ def load_config(path: str) -> Config:
     if input_video:
         input_video = os.path.abspath(os.path.join(cfg_dir, input_video))
 
+    # ConfigError rather than ValueError: `videoflow deploy` and `run-local` render
+    # a VideoflowError as message + remedy and exit 2, so a typo in the config
+    # reads as "here is the fix" instead of a traceback with exit 1.
+    cfg_path = os.path.abspath(path)
     device = str(raw.get('device', 'cpu')).lower()
     if device not in ('cpu', 'gpu'):
-        raise ValueError(f"device must be 'cpu' or 'gpu', got {device!r}")
+        raise ConfigError(f'device is {device!r}.',
+                        remedy = f"Set device to 'cpu' or 'gpu' in {cfg_path}.",
+                        config = cfg_path, device = device)
 
     flow_type = str(raw.get('flow_type', 'batch')).lower()
     if flow_type not in ('batch', 'realtime'):
-        raise ValueError(f"flow_type must be 'batch' or 'realtime', got {flow_type!r}")
+        raise ConfigError(f'flow_type is {flow_type!r}.',
+                        remedy = f"Set flow_type to 'batch' or 'realtime' in {cfg_path}.",
+                        config = cfg_path, flow_type = flow_type)
 
     return Config(
-        path=os.path.abspath(path),
+        path=cfg_path,
         work_dir=work_dir,
         input_video=input_video,
         # Relative to work_dir (already absolute), so results land next to the

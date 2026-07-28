@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+from videoflow.core.errors import ConfigError, SchemaError
 from videoflow.core.node import OneTaskProcessorNode
 
 from .ballkf import BallKalman
@@ -86,7 +87,11 @@ class MultiviewFuser(OneTaskProcessorNode):
                 with open(self._calibration_path) as f:
                     calib = json.load(f)
             return calib
-        raise ValueError('MultiviewFuser needs calibration or calibration_path')
+        raise ConfigError(
+            'MultiviewFuser was given neither calibration nor calibration_path.',
+            remedy = 'Pass the inline calibration dict, or a calibration_path '
+                    'pointing at the per-camera <cam>.json files calibrate.py wrote.',
+            node = self.name, cameras = list(self._cameras))
 
     # -- main -----------------------------------------------------------------
     def process(self, *inputs, ctx=None):
@@ -95,6 +100,16 @@ class MultiviewFuser(OneTaskProcessorNode):
         for cam, packed in zip(self._cameras, inputs):
             if packed is None:
                 continue
+            # A camera whose packer emitted something other than a feature dict
+            # will do so identically on every redelivery — dead-letter that one
+            # moment rather than retry it, and name the camera, since with N
+            # parents "a dict was expected" is otherwise unattributable.
+            if not isinstance(packed, dict):
+                raise SchemaError(
+                    f'camera {cam!r} sent {type(packed).__name__}, not a feature dict',
+                    remedy = 'Check the FeaturePacker wired to this camera; the '
+                            'fuser reads {tracks, ball} per view.',
+                    node = self.name, camera = cam)
             ev = None
             if info and info.get(cam):
                 ev = info[cam].get('event_ts')

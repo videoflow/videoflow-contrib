@@ -28,6 +28,11 @@ from typing import Any
 import numpy as np
 from PIL import Image
 from videoflow.core.constants import GPU
+from videoflow.core.errors import (
+    WORKER_FATAL,
+    SchemaError,
+    register_classifier_for,
+)
 from videoflow.core.node import ProcessorNode
 from videoflow.utils.system import granted_gpus
 
@@ -35,6 +40,34 @@ logger = logging.getLogger(__package__)
 
 DEFAULT_MODEL_ID = 'Qwen/Qwen2.5-VL-7B-Instruct'
 DEFAULT_PROMPT = 'Describe this image in one sentence.'
+
+_torch_classifiers_registered = False
+
+
+def _torch_oom_type() -> type | None:
+    import torch  # lazy, mirrors open(): the ML stack stays out of module scope
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+
+def _register_torch_classifiers() -> None:
+    '''
+    Maps torch's CUDA out-of-memory error onto the ``worker_fatal`` disposition.
+
+    A component cannot subclass ``torch.cuda.OutOfMemoryError``, so videoflow is
+    told about it instead — from ``open()``, since torch is deliberately not a
+    module-scope import here.
+
+    A sharded 7B model is exactly where this bites. An OOM on one of the granted
+    devices is a property of *this worker's* memory, never of the frame it
+    happened to be holding: the frame goes back to the broker untouched and the
+    worker stops, instead of a wedged pod dead-lettering a healthy stream one
+    caption at a time under someone else's fault.
+    '''
+    global _torch_classifiers_registered
+    if _torch_classifiers_registered:
+        return
+    _torch_classifiers_registered = register_classifier_for(
+        'torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
 
 
 def build_chat(prompt: str) -> list[dict[str, Any]]:
@@ -114,6 +147,7 @@ class VlmCaptioner(ProcessorNode):
         import torch
         from transformers import AutoModelForImageTextToText, AutoProcessor
 
+        _register_torch_classifiers()
         if self._device_type == GPU:
             logger.info('loading %s across %d granted GPU(s) %s',
                         self._model_id, self.gpu_count, granted_gpus())
@@ -136,6 +170,16 @@ class VlmCaptioner(ProcessorNode):
         - Returns: the caption string.
         '''
         import torch  # already loaded by open(); function-level to keep the module framework-free
+        # A payload that is not an (h, w, 3) frame will fail identically however
+        # many times it is redelivered, so it is dead-lettered on the first
+        # failure rather than retried to the end of the budget.
+        if not isinstance(frame, np.ndarray) or frame.ndim != 3:
+            shape = frame.shape if isinstance(frame, np.ndarray) else type(frame).__name__
+            raise SchemaError(
+                f'expected an (h, w, 3) BGR frame, got {shape}',
+                remedy = 'Unpack the reader tuple, or insert a reshape upstream '
+                        'of this captioner.',
+                node = self.name)
         image = to_pil_rgb(frame)
         text = self._processor.apply_chat_template(
             build_chat(self._prompt), tokenize=False, add_generation_prompt=True)

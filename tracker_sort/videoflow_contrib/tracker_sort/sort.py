@@ -5,7 +5,12 @@ import math
 import numpy as np
 from filterpy.kalman import KalmanFilter
 from scipy.optimize import linear_sum_assignment
+from videoflow.core.errors import ConfigError
 from videoflow.processors.vision.trackers import BoundingBoxTracker
+
+#: Metric functions ``metric_factory`` understands, named in every error message
+#: so the fix is the message rather than a trip to the source.
+METRIC_TYPES = ('iou', 'euclidean')
 
 
 def linear_assignment(cost_matrix):
@@ -52,7 +57,9 @@ def metric_factory(metric_type):
     elif metric_type == "euclidean":
         return eucl
     else:
-        raise ValueError("Cannot identify metric_type {}".format(metric_type))
+        raise ConfigError(f'unknown metric_type {metric_type!r}.',
+                        remedy = f'Use one of: {", ".join(METRIC_TYPES)}.',
+                        metric_type = metric_type)
 
 def convert_bbox_to_z(bbox):
     """
@@ -216,7 +223,12 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
             elif self.metric_function_type == 'euclidean':
                 self.metric_function_threshold = 100
             else:
-                raise ValueError(f'Unknown metric function type: {self.metric_function_type}')
+                raise ConfigError(
+                    f'KalmanFilterBoundingBoxTracker got metric_function_type '
+                    f'{self.metric_function_type!r}.',
+                    remedy = f'Use one of: {", ".join(METRIC_TYPES)}, or pass an '
+                            f'explicit metric_function_threshold.',
+                    metric_function_type = self.metric_function_type)
         else:
             self.metric_function_threshold = metric_function_threshold
         self.previous_fid = -1
@@ -255,7 +267,12 @@ class KalmanFilterBoundingBoxTracker(BoundingBoxTracker):
         elif self.metric_function_type == 'euclidean':
             matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.metric_function, self.metric_function_threshold * -1)
         else:
-            raise ValueError('Unrecognized metric function type')
+            # Unreachable via the constructor, which validates first; kept typed so
+            # a future metric added to metric_factory but not here still names the fix.
+            raise ConfigError(
+                f'unknown metric_function_type {self.metric_function_type!r}.',
+                remedy = f'Use one of: {", ".join(METRIC_TYPES)}.',
+                metric_function_type = self.metric_function_type)
 
         #update matched trackers with assigned detections
         d_to_t = {}

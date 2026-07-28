@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import ConfigError
 from videoflow.processors.vision.detectors import ObjectDetector
 from videoflow.utils.downloader import get_file
 
@@ -120,12 +121,20 @@ class TensorflowObjectDetector(ObjectDetector):
         self._dataset = dataset
 
         if path_to_pb_file is None and (architecture is None or dataset is None):
-            raise ValueError('If path_to_pb_file is None, then architecture and dataset cannot be None')
+            raise ConfigError(
+                'TensorflowObjectDetector was given neither path_to_pb_file nor a '
+                'complete (architecture, dataset) pair.',
+                remedy = 'Pass a local path_to_pb_file, or both architecture and '
+                        'dataset from: {}.'.format(', '.join(self.supported_models)))
 
         if path_to_pb_file is None:
             remote_model_id = f'{architecture}_{dataset}'
             if remote_model_id not in self.supported_models:
-                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
+                raise ConfigError(
+                    f'TensorflowObjectDetector got model {remote_model_id!r}.',
+                    remedy = 'Use one of: {}, or pass an explicit path_to_pb_file.'.format(
+                        ', '.join(self.supported_models)),
+                    architecture = architecture, dataset = dataset)
             self._remote_model_file_name = f'{architecture}_{dataset}.pb'
 
         self._min_score_threshold = min_score_threshold

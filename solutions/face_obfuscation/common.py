@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass, field
 
 import yaml
+from videoflow.core.errors import ConfigError
 
 
 @dataclass
@@ -42,30 +43,44 @@ def load_config(path: str) -> Config:
         raw = yaml.safe_load(f) or {}
     cfg_dir = os.path.dirname(os.path.abspath(path))
 
+    # ConfigError rather than ValueError: `videoflow deploy` and `run-local` render
+    # a VideoflowError as message + remedy and exit 2, so a typo in the config
+    # reads as "here is the fix" instead of a traceback with exit 1.
+    cfg_path = os.path.abspath(path)
     input_video = raw.get('input_video')
     if not input_video:
-        raise ValueError("config must set 'input_video' (path to the video to obfuscate)")
+        raise ConfigError('input_video is not set.',
+                        remedy = f'Set input_video to the path of the video to '
+                                f'obfuscate in {cfg_path}.',
+                        config = cfg_path)
 
     work_dir = os.path.abspath(os.path.join(cfg_dir, raw.get('work_dir', './out')))
     os.makedirs(work_dir, exist_ok=True)
 
     device = str(raw.get('device', 'cpu')).lower()
     if device not in ('cpu', 'gpu'):
-        raise ValueError(f"device must be 'cpu' or 'gpu', got {device!r}")
+        raise ConfigError(f'device is {device!r}.',
+                        remedy = f"Set device to 'cpu' or 'gpu' in {cfg_path}.",
+                        config = cfg_path, device = device)
 
     flow_type = str(raw.get('flow_type', 'batch')).lower()
     if flow_type not in ('batch', 'realtime'):
-        raise ValueError(f"flow_type must be 'batch' or 'realtime', got {flow_type!r}")
+        raise ConfigError(f'flow_type is {flow_type!r}.',
+                        remedy = f"Set flow_type to 'batch' or 'realtime' in {cfg_path}.",
+                        config = cfg_path, flow_type = flow_type)
 
     # VideofileWriter only supports .avi; catch it here with a clear message
     # rather than deep inside graph construction.
     output_video = raw.get('output_video', 'blurred_video.avi')
     if not output_video.endswith('.avi'):
-        raise ValueError(f"output_video must end in .avi (videoflow's VideofileWriter "
-                         f'only supports that container), got {output_video!r}')
+        raise ConfigError(
+            f'output_video is {output_video!r}.',
+            remedy = f"Give output_video an .avi extension in {cfg_path} — "
+                    f"videoflow's VideofileWriter supports only that container.",
+            config = cfg_path, output_video = output_video)
 
     return Config(
-        path=os.path.abspath(path),
+        path=cfg_path,
         work_dir=work_dir,
         input_video=os.path.abspath(os.path.join(cfg_dir, input_video)),
         # Relative to work_dir (which is already absolute), so results land next
