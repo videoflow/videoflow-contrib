@@ -3,6 +3,7 @@ import os.path
 import cv2
 import numpy as np
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import WORKER_FATAL, ConfigError, register_classifier_for
 from videoflow.core.node import ProcessorNode
 from videoflow.utils.downloader import get_file
 
@@ -10,6 +11,19 @@ from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 
 BASE_URL_DETECTRON2 = 'https://github.com/videoflow/videoflow-contrib/releases/download/detectron2/'
+
+def _torch_oom_type():
+    # detectron2 already pulls torch in at module scope, so this resolver only
+    # exists to tolerate the torch versions predating ``torch.cuda.OutOfMemoryError``.
+    import torch
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+# A component cannot subclass torch's CUDA out-of-memory error, so videoflow is
+# told about it instead: an OOM is a property of this worker, never of the frame
+# it was holding. Without the mapping a wedged GPU dead-letters a healthy stream
+# one frame at a time; with it the frame goes back to the broker untouched and
+# the worker stops so a replacement can take over.
+register_classifier_for('torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
 
 class HumanPoseAnnotator(ProcessorNode):
     _KEYPOINT_THRESHOLD = 0.05
@@ -132,14 +146,25 @@ class Detectron2HumanPose(ProcessorNode):
         self._predictor = None
 
         if path_to_model_file is None and architecture is None:
-            raise ValueError('If path_to_model_file is None, then architecture cannot be None')
+            raise ConfigError(
+                'Detectron2HumanPose was given neither path_to_model_file nor architecture.',
+                remedy = 'Pass a local path_to_model_file, or an architecture from: '
+                        '{}.'.format(', '.join(self.supported_models)))
         if path_to_model_file is None:
             remote_model_id = f'{architecture}'
             if remote_model_id not in self.supported_models:
-                raise ValueError('model is not one of supported models: {}'.format(', '.join(self.supported_models)))
+                raise ConfigError(
+                    f'Detectron2HumanPose got architecture {architecture!r}.',
+                    remedy = 'Use one of: {}, or pass an explicit path_to_model_file.'.format(
+                        ', '.join(self.supported_models)),
+                    architecture = architecture)
             self._remote_model_file_name = f'{architecture}.pkl'
         if path_to_model_file is not None and path_to_model_config is None:
-            raise ValueError('path_to_model_config needs to be provided if path_to_model_file is provided')
+            raise ConfigError(
+                'Detectron2HumanPose got path_to_model_file without path_to_model_config.',
+                remedy = 'Pass the matching path_to_model_config, or drop '
+                        'path_to_model_file to use a bundled architecture.',
+                path_to_model_file = path_to_model_file)
         super(Detectron2HumanPose, self).__init__(nb_tasks = nb_tasks, device_type = device_type, **kwargs)
 
     def open(self):

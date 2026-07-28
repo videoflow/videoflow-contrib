@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import CapabilityError, ConfigError, SchemaError
 from videoflow.core.node import ProcessorNode
 
 _NUM_CANON = 26
@@ -58,13 +59,23 @@ class PoseTopDown(ProcessorNode):
         super().__init__(nb_tasks=nb_tasks, device_type=device_type, **kwargs)
 
     def open(self):
+        # A licence gate is the component declining to do something it can
+        # technically do — CapabilityError, not a bad value, and the remedy is the
+        # opt-in rather than a different spelling.
         if self._backend == 'sapiens' and not self._allow_noncommercial:
-            raise RuntimeError("Sapiens weights are CC-BY-NC (non-commercial); set "
-                               "allow_noncommercial=True to enable, or use 'rtmw'/'rtmpose'.")
+            raise CapabilityError(
+                'the Sapiens weights are CC-BY-NC (non-commercial) and this flow '
+                'has not opted in.',
+                remedy = "Pass allow_noncommercial=True if that licence suits your "
+                        "use, or use backend='rtmw' / 'rtmpose' (Apache-2.0).",
+                node = self.name, backend = self._backend)
         from rtmlib import RTMPose  # lazy: onnxruntime
         if self._backend not in _POSE_MODELS and self._onnx_url is None:
-            raise ValueError(f"backend {self._backend!r} needs an explicit onnx_url "
-                             f"(known: {sorted(_POSE_MODELS)})")
+            raise ConfigError(
+                f'PoseTopDown got backend {self._backend!r}, which has no default weights.',
+                remedy = f'Use one of: {", ".join(sorted(_POSE_MODELS))}, or pass an '
+                        f'explicit onnx_url for this backend.',
+                node = self.name, backend = self._backend)
         default_url, default_size, _ = _POSE_MODELS.get(self._backend, (None, (288, 384), 26))
         url = self._onnx_url or default_url        # rtmlib downloads/extracts the .zip and caches
         size = self._model_input_size or default_size
@@ -76,7 +87,17 @@ class PoseTopDown(ProcessorNode):
         if isinstance(frame, tuple):
             frame = frame[1]
         frame = np.asarray(frame)
-        tr = np.asarray(tracks, dtype=np.float64).reshape(-1, 5)
+        # Row-alignment with the tracks is this node's contract, so a track array
+        # of the wrong shape is bad data, not a blip: it fails identically on
+        # every redelivery and is dead-lettered on the first failure.
+        try:
+            tr = np.asarray(tracks, dtype=np.float64).reshape(-1, 5)
+        except (TypeError, ValueError) as e:
+            raise SchemaError(
+                f'expected an (N, 5) [ymin,xmin,ymax,xmax,track_id] array: {e}',
+                remedy = 'Check the tracker feeding this node emits the y-first '
+                        '5-column format.',
+                node = self.name) from e
         if len(tr) == 0:
             return np.zeros((0, _NUM_CANON, 3))
         # y-first [ymin,xmin,ymax,xmax] → xyxy for rtmlib

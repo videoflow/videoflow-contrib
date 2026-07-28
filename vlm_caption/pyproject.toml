@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videoflow_contrib_vlm_caption"
+version = "1.0.0"
+description = "Hugging Face vision-language frame captioner for Videoflow — the multi-GPU reference component (RFC 0003)"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "videoflow>=1.0.0",
+    "numpy>=1.24",
+    "pillow",
+    "torch>=2.4",              # CPU wheel; the GPU image pre-installs CUDA torch (cu124), which satisfies this
+    "transformers>=4.49,<5",   # Qwen2.5-VL support landed in 4.49
+    "accelerate>=1.2",         # device_map='auto' sharding across the granted GPUs
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+# GPU: the -cuda base image + gpu.Dockerfile provide CUDA torch; the HF stack rides on it.
+[project.optional-dependencies]
+gpu = ["transformers>=4.49,<5", "accelerate>=1.2"]
+
+[project.urls]
+Homepage = "https://github.com/videoflow/videoflow-contrib"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["videoflow_contrib/vlm_caption"]

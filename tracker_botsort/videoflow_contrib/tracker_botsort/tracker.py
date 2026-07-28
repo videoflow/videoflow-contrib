@@ -16,7 +16,60 @@ from typing import Any
 
 import numpy as np
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import (
+    WORKER_FATAL,
+    ConfigError,
+    SchemaError,
+    register_classifier_for,
+)
 from videoflow.core.node import OneTaskProcessorNode
+
+_torch_classifiers_registered = False
+
+
+def _torch_oom_type() -> type | None:
+    import torch  # lazy: the ML stack stays out of module scope (see the docstring)
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+
+def _register_torch_classifiers() -> None:
+    '''
+    Maps torch's CUDA out-of-memory error onto the ``worker_fatal`` disposition.
+
+    A component cannot subclass ``torch.cuda.OutOfMemoryError``, so videoflow is
+    told about it instead — from ``open()``, since torch is deliberately not a
+    module-scope import here. Without the mapping a wedged GPU reads as an
+    ordinary transient failure and one sick pod dead-letters a healthy stream a
+    frame at a time; with it the frame is handed back and the worker stops.
+
+    This tracker is single-task, so "the worker stops" also means the whole
+    tracking state is rebuilt on restart — which is the honest outcome, since a
+    tracker that lost its ReID model has no state worth preserving.
+    '''
+    global _torch_classifiers_registered
+    if _torch_classifiers_registered:
+        return
+    _torch_classifiers_registered = register_classifier_for(
+        'torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
+
+
+def _as_detections(detections, node: str) -> np.ndarray:
+    '''
+    The (N, 6) detection array this tracker's contract requires.
+
+    A payload that is not one fails identically on every redelivery, so it is
+    poison — dead-lettered on the first failure with its actual shape recorded,
+    rather than retried to the end of the budget and then dead-lettered anyway
+    under a numpy reshape error that names no node and suggests no fix.
+    '''
+    try:
+        return np.asarray(detections, dtype=np.float64).reshape(-1, 6)
+    except (TypeError, ValueError) as e:
+        raise SchemaError(
+            f'expected an (N, 6) [ymin,xmin,ymax,xmax,class,score] detection array: {e}',
+            remedy = 'Check the detector feeding this tracker emits the y-first '
+                    '6-column format.',
+            node = node) from e
 
 
 class BoxmotTracker(OneTaskProcessorNode):
@@ -50,6 +103,8 @@ class BoxmotTracker(OneTaskProcessorNode):
         import inspect
         from pathlib import Path
 
+        _register_torch_classifiers()
+
         from boxmot import (  # lazy: heavy (torch)
             BoostTrack,
             BotSort,
@@ -64,7 +119,10 @@ class BoxmotTracker(OneTaskProcessorNode):
                    'hybridsort': HybridSort, 'strongsort': StrongSort}
         Cls = classes.get(self._method)
         if Cls is None:
-            raise ValueError(f'unknown tracker method {self._method!r} (known: {sorted(classes)})')
+            raise ConfigError(
+                f'BoxmotTracker got method {self._method!r}.',
+                remedy = f'Use one of: {", ".join(sorted(classes))}.',
+                node = self.name, method = self._method)
         with_reid = self._with_reid if self._with_reid is not None else (self._reid_weights is not None)
         # Pass only the kwargs this tracker class actually accepts — robust across the
         # differing per-tracker signatures (and across boxmot versions).
@@ -95,7 +153,7 @@ class BoxmotTracker(OneTaskProcessorNode):
         if isinstance(frame, tuple):
             frame = frame[1]
         frame = np.asarray(frame)
-        dets = np.asarray(detections, dtype=np.float64).reshape(-1, 6)
+        dets = _as_detections(detections, self.name)
         if len(dets):
             dets = dets[dets[:, 5] >= self._min_conf]
         # y-first [ymin,xmin,ymax,xmax,class,score] → BoxMOT [x1,y1,x2,y2,conf,cls]

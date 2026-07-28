@@ -11,8 +11,19 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
 from videoflow.core.constants import CPU, GPU
+from videoflow.core.errors import TRANSIENT, WORKER_FATAL, register_error_classifier
 from videoflow.core.node import ProcessorNode
 from videoflow.utils.downloader import get_file
+
+# Tensorflow raises its own exception hierarchy, which a component cannot subclass,
+# so the unambiguous cases are mapped onto videoflow dispositions here, on import.
+# ResourceExhausted means the device is out of memory: the crop batch is fine, this
+# worker is not, so it is handed back rather than dead-lettered under someone
+# else's fault. InvalidArgumentError is deliberately not mapped — it means a bad
+# input shape as often as a bad graph.
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+register_error_classifier(tf.errors.UnavailableError, TRANSIENT)
+register_error_classifier(tf.errors.DeadlineExceededError, TRANSIENT)
 
 
 def _run_in_batches(f, data_dict, out, batch_size):

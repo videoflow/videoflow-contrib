@@ -67,6 +67,10 @@ class BallKalman:
 
     def predict(self, dt: float) -> np.ndarray:
         if self.x is None:
+            # Deliberately a bare builtin, not a videoflow error: this is an
+            # internal invariant (the only caller guards on `initialized`), not a
+            # failure mode a message or a config can reach. Giving it a
+            # disposition would claim it is something the runtime should handle.
             raise RuntimeError('BallKalman not initialized')
         F = self._F(dt)
         self.x = F @ self.x

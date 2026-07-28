@@ -41,8 +41,9 @@ detector:
 # whole exclusive GPU *per camera*, so the defaults below keep a 3-camera run at
 # 3 GPU claims (detectors only) instead of 9. The shipped tracker runs without
 # ReID weights (a GPU buys it nothing), and top-down pose works on CPU — set
-# them to gpu only on a cluster with devices to spare (or use time-slicing /
-# `--gpu-mode shared`; see the videoflow GPU-sharing docs).
+# them to gpu only on a cluster with devices to spare (or share cards: device-
+# plugin time-slicing on a dev box, or `--gpu-mode mix` on MIG-capable GPUs;
+# see the videoflow GPU-sharing docs).
 device:
   detector: gpu
   tracker: cpu

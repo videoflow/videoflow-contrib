@@ -97,6 +97,32 @@ spec:
 - **`io` types** are `videoflow.v1.Tensor` (arrays/frames) or `videoflow.v1.Value` (structured
   data).
 
+## Errors
+
+Two things to get right before the component is done, both from `videoflow.core.errors`:
+
+1. **Validate parameters with `ConfigError`** (or `CapabilityError` for something the component
+   declines to do), in `__init__` for pure-value checks and in `open()` for anything needing the
+   framework. Always pass `remedy = ...` naming the fix and `node = self.name`. The CLI renders
+   both and exits 2; a bare `ValueError` gets a traceback and exit 1.
+
+2. **Choose a disposition for every per-message failure.** A malformed payload is `SchemaError`
+   (poison — dead-lettered on the first failure). A wedged accelerator is `DeviceError`
+   (worker_fatal — the message is handed back, the worker stops). A blipped upstream service is
+   `UpstreamUnavailable` (transient — retried). Anything unclassified defaults to transient.
+
+Then register the framework exceptions you cannot subclass, **in the module that actually imports
+the framework**:
+
+```python
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)   # tf at module scope
+register_classifier_for('torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)  # torch lazy
+```
+
+`soccer_detector/detector.py` is the reference for the lazy (torch, from `open()`) form,
+`detector_tf/tensorflow_utils.py` for the eager one. Full rationale and the disposition table:
+[../agents/videoflow-author.md](../agents/videoflow-author.md#failing-correctly--the-disposition-decides-what-a-failure-costs).
+
 ## Dockerfiles
 
 ```dockerfile
@@ -129,6 +155,15 @@ assert type(node)(**node.get_params()).get_params() == node.get_params()
 ```
 
 That two-line check catches the `self._<name>` mistake before it becomes a pod crash loop.
+
+And confirm the classifier registration actually took effect — a registration in a module nothing
+imports silently never runs:
+
+```python
+from videoflow.core.errors import classify
+import videoflow_contrib.my_component        # noqa: the import is the point
+assert classify(TheFrameworkOomError()) == 'worker_fatal'
+```
 
 ## Finally
 

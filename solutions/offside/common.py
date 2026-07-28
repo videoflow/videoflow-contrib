@@ -12,6 +12,7 @@ import os
 from dataclasses import dataclass, field
 
 import yaml
+from videoflow.core.errors import ConfigError
 
 
 @dataclass
@@ -94,18 +95,29 @@ def load_config(path: str) -> Config:
     trim = raw.get('trim', {})
     work_dir = os.path.abspath(os.path.join(cfg_dir, raw.get('work_dir', './out')))
     os.makedirs(work_dir, exist_ok=True)
+    # ConfigError rather than ValueError: `videoflow deploy` and `run-local` render
+    # a VideoflowError as message + remedy and exit 2, so a typo in the config
+    # reads as "here is the fix" instead of a traceback with exit 1.
+    cfg_path = os.path.abspath(path)
     flow_type = str(raw.get('flow_type', 'batch')).lower()
     if flow_type not in ('batch', 'realtime'):
-        raise ValueError(f"flow_type must be 'batch' or 'realtime', got {flow_type!r}")
+        raise ConfigError(f'flow_type is {flow_type!r}.',
+                        remedy = f"Set flow_type to 'batch' or 'realtime' in {cfg_path}.",
+                        config = cfg_path, flow_type = flow_type)
     device = {k: str(v).lower() for k, v in (raw.get('device') or {}).items()}
     for stage, dev in device.items():
         if stage not in Config.DEVICE_DEFAULTS:
-            raise ValueError(f"device.{stage}: unknown stage; expected one of "
-                             f"{sorted(Config.DEVICE_DEFAULTS)}")
+            raise ConfigError(
+                f'device.{stage} is not a pipeline stage.',
+                remedy = f'Use one of: {", ".join(sorted(Config.DEVICE_DEFAULTS))} '
+                        f'in {cfg_path}.',
+                config = cfg_path, stage = stage)
         if dev not in ('cpu', 'gpu'):
-            raise ValueError(f"device.{stage} must be 'cpu' or 'gpu', got {dev!r}")
+            raise ConfigError(f'device.{stage} is {dev!r}.',
+                            remedy = f"Set device.{stage} to 'cpu' or 'gpu' in {cfg_path}.",
+                            config = cfg_path, stage = stage, device = dev)
     return Config(
-        path=os.path.abspath(path),
+        path=cfg_path,
         work_dir=work_dir,
         cameras=cameras,
         videos={c: os.path.abspath(v) for c, v in videos.items()},

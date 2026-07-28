@@ -1,0 +1,32 @@
+apiVersion: videoflow.io/v1
+kind: Component
+metadata:
+  name: videoflow/vlm-caption
+  version: "1.0.0"
+  license: Apache-2.0
+  description: Vision-language frame captioner (Hugging Face, default Qwen2.5-VL-7B-Instruct). The multi-GPU reference component (RFC 0003) - loads with device_map='auto' so the model shards across all granted GPUs (default 2). Emits one caption string per frame.
+spec:
+  role: processor
+  protocol: 1
+  runtime:
+    pythonClass: videoflow_contrib.vlm_caption.VlmCaptioner
+    images:
+      cpu: ghcr.io/videoflow/contrib-vlm-caption:1.0.0
+      gpu: ghcr.io/videoflow/contrib-vlm-caption:1.0.0-cuda
+  device: [cpu, gpu]
+  resources:
+    gpu:
+      count: 2       # default grant (RFC 0003), not a floor; gpu_count= overrides (e.g. 1 for a quantized model)
+  params:
+    schema:
+      type: object
+      additionalProperties: false
+      properties:
+        model_id: {type: string, default: 'Qwen/Qwen2.5-VL-7B-Instruct', description: Hugging Face model id of an image-text-to-text model.}
+        prompt: {type: string, default: 'Describe this image in one sentence.', description: Instruction sent with every frame.}
+        max_new_tokens: {type: integer, default: 64, minimum: 1, description: Generation budget per caption.}
+  io:
+    inputs:
+      - {name: frame, type: videoflow.v1.Tensor}
+    output: {type: videoflow.v1.Value}   # caption string
+  constraints: {partitionable: true}

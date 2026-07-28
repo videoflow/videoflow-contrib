@@ -5,8 +5,23 @@ from __future__ import absolute_import, division, print_function
 # so we import that namespace as ``tf`` and disable v2 behaviour to keep the original
 # graph-mode semantics. This lets the module run on modern TF2 / Python 3.9-3.12.
 import tensorflow.compat.v1 as tf
+from videoflow.core.errors import TRANSIENT, WORKER_FATAL, register_error_classifier
 
 tf.disable_v2_behavior()
+
+# Tensorflow raises its own exception hierarchy, which a component cannot subclass,
+# so the unambiguous cases are mapped onto videoflow dispositions here — on import
+# of the module that owns the tensorflow dependency, so every flow using this
+# component inherits the behaviour without asking for it.
+#
+# ResourceExhausted is the one that matters: it means the device is out of memory.
+# The frame is fine, this worker is not, so it is handed back to the broker for a
+# healthy replica instead of being dead-lettered under someone else's fault.
+# InvalidArgumentError is deliberately NOT mapped: it means a bad input shape as
+# often as it means a bad graph, and guessing wrong dead-letters healthy frames.
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+register_error_classifier(tf.errors.UnavailableError, TRANSIENT)
+register_error_classifier(tf.errors.DeadlineExceededError, TRANSIENT)
 
 class TfliteModel:
     '''

@@ -122,8 +122,58 @@ the reference.
 **`process()` returning `None` does not drop a message.** End-of-stream travels on a separate
 `_eos` subject.
 
+**Raise from the taxonomy in `videoflow.core.errors`, never a bare builtin.** Which class you
+pick decides what a failure *costs*, so it is not cosmetic:
+
+| Where it fails | Class | What happens |
+|---|---|---|
+| `__init__` / `open()` — a bad param, an unknown backend, missing weights config | `ConfigError`, `NodeContractError` | exit 2, message + remedy, no dead letter |
+| `open()` — the component declining something it could do (a non-commercial licence, an unwired backend) | `CapabilityError` | exit 2 |
+| `open()` — the world is wrong (unreadable video, unreachable weights host) | `ResourceUnavailable` | exit 3 |
+| `process()` / `consume()` — the payload is malformed | `SchemaError` / `PoisonMessage` | dead-lettered on the **first** failure |
+| `process()` — an API or model server blipped | `UpstreamUnavailable` / `TransientFailure` | retried with backoff, then dead-lettered |
+| `process()` — the accelerator wedged, memory exhausted | `DeviceError` / `WorkerFatal` | message handed back untouched, worker stops |
+
+Every one takes `remedy = ...` — the fix, as its own field, because the CLI, the DLQ inspector
+and the Kubernetes termination log all render it. Pass identifying context as keywords
+(`node = self.name`, `camera = cam`); it becomes queryable log and DLQ fields.
+
+Getting `poison` vs `worker_fatal` wrong is the expensive mistake: a wedged GPU misread as bad
+data moves an entire healthy stream into the dead-letter queue one message at a time. An
+unclassified exception defaults to `transient`, so nothing changes until a node opts in.
+
+**For an exception type you cannot subclass, register a classifier.** No component can subclass
+`torch.cuda.OutOfMemoryError` or `tf.errors.ResourceExhaustedError`, so the mapping is declared
+instead — once, and every flow using the component inherits it:
+
+```python
+# TF components: tf is a module-scope import, so register at module scope.
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+
+# torch components: torch is lazy (see Imports), so register from open() via a
+# module-level guard — `register_classifier_for` tolerates the type being absent.
+register_classifier_for('torch.cuda.OutOfMemoryError', WORKER_FATAL, _torch_oom_type)
+```
+
+`soccer_detector/detector.py` is the reference for the lazy form,
+`detector_tf/tensorflow_utils.py` for the eager one. **Register in the module that actually
+imports the framework** — a registration in a module nothing imports silently never runs.
+
+Be conservative about what you map. `tf.errors.InvalidArgumentError` is deliberately unmapped:
+it means a bad input shape as often as a bad graph, and guessing wrong dead-letters healthy
+frames.
+
 **Load models in `open()`, release in `close()`.** `__init__` runs on the machine building the
 graph, which may have no GPU and no weights.
+
+**Multi-GPU models (RFC 0003).** A component whose model spans GPUs relies on one contract:
+inside the worker, the visible devices are exactly the granted devices, `cuda:0..N-1`, with
+`N == self.gpu_count`. Shard in `open()` (`device_map = 'auto'` for HF models, explicit
+`.to('cuda:1')` for multi-model nodes) and put **zero device arithmetic** anywhere else. Declare
+the default need in `component.yaml` — `spec: {resources: {gpu: {count: 2}}}` — so graph authors
+don't pass `gpu_count=` by hand; treat the descriptor count as a default, not a floor, and
+enforce any hard minimum in `open()` via `videoflow.utils.system.granted_gpus()`. Multi-GPU
+requires whole exclusive devices: MIG slices and time-sliced units can't be combined.
 
 **Prefer subclassing a core domain base** (`videoflow.processors.vision.detectors.ObjectDetector`,
 `BoundingBoxTracker`, `videoflow.producers.video.VideoFileReader`) over the raw node classes, so
@@ -153,6 +203,9 @@ A change isn't done until the docs describing it are updated **in the same commi
 - [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — when a solution's config keys,
   prep artifacts, or required deploy flags change. Its recipes are executable, so they go stale
   silently and only fail on the next cluster run.
+- [../videoflow/docs/source/user-documentation/error-handling-and-recovery.rst](../videoflow/docs/source/user-documentation/error-handling-and-recovery.rst)
+  — when a component's disposition choice, classifier registration or exit code changes. That
+  page is the user-facing model these conventions implement.
 - `CLAUDE.md` and `.claude/docs/*.md` — when conventions, layout, or commands change.
 - The sibling [../videoflow](../videoflow) repo, if the change was driven by a core-API change.
 

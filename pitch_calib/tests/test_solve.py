@@ -5,6 +5,7 @@ and a low reprojection RMS.
 '''
 import numpy as np
 import pytest
+from videoflow.core.errors import POISON, SchemaError
 from videoflow_contrib.pitch_calib.model import PitchModel
 from videoflow_contrib.pitch_calib.solve import (
     homography_dlt,
@@ -122,6 +123,12 @@ def test_cross_camera_center_spot_agreement():
 
 
 def test_too_few_landmarks_raises():
+    # SchemaError, not a bare ValueError: too few landmarks is bad *data*, so the
+    # disposition must be poison — a retry re-reads the same observations and
+    # falls exactly as short.
     pitch = PitchModel(105, 68)
-    with pytest.raises(ValueError):
+    with pytest.raises(SchemaError) as excinfo:
         solve_camera({'center_spot': (100, 100), 'halfway_top': (200, 50)}, pitch, (1080, 1920))
+    assert excinfo.value.code == 'VF_POISON_SCHEMA'
+    assert excinfo.value.disposition == POISON
+    assert excinfo.value.remedy

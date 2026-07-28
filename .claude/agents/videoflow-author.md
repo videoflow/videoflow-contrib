@@ -90,6 +90,90 @@ either make downstream nodes explicitly tolerate `None`, or carry an
 `(is_valid, payload)` tuple, or do the filtering inside the node that would otherwise
 do the expensive work. Decide this deliberately and say so in the docstring.
 
+### Failing correctly — the disposition decides what a failure costs
+
+Raise from `videoflow.core.errors`, never a bare `ValueError`/`RuntimeError`. The class you pick
+is read by three different things (the retry ladder, the metric label, the restart policy), so it
+is a design decision, not a formality.
+
+**Build and start-up** — the node cannot be constructed or opened. Exit 2 (yours) or 3 (the
+world's), rendered by the CLI as a message plus the fix:
+
+```python
+def __init__(self, backend='yolo', **kwargs):
+    ...
+
+def open(self):
+    if self._backend not in BACKENDS:
+        raise ConfigError(f'{type(self).__name__} got backend {self._backend!r}.',
+                          remedy=f'Use one of: {", ".join(BACKENDS)}.',
+                          node=self.name, backend=self._backend)
+```
+
+- `ConfigError` — a parameter value is wrong. `NodeContractError` — the node violates what a
+  worker needs to rebuild or run it. `CapabilityError` — the component declining something it
+  *could* do (a non-commercial licence, a backend deliberately not wired up).
+- `ResourceUnavailable` — the world is wrong: an unreadable video, an unreachable weights host.
+
+**Per message** — the disposition is the whole point:
+
+```python
+def process(self, frame, tracks):
+    try:
+        tr = np.asarray(tracks, dtype=np.float64).reshape(-1, 5)
+    except (TypeError, ValueError) as e:
+        raise SchemaError(f'expected an (N, 5) track array: {e}',       # poison
+                          remedy='Check the tracker upstream emits the y-first format.',
+                          node=self.name) from e
+    try:
+        return self._model(frame, tr)
+    except OutOfMemoryError as e:
+        raise DeviceError('the GPU is out of memory', remedy='Lower the batch size.') from e
+```
+
+| Disposition | Means | Cost |
+|---|---|---|
+| `poison` (`SchemaError`, `PoisonMessage`, `DecodeError`) | the **data** is bad | dead-lettered on the **first** failure |
+| `transient` (`TransientFailure`, `UpstreamUnavailable`) | the **world** blipped | retried with backoff, then dead-lettered |
+| `worker_fatal` (`WorkerFatal`, `DeviceError`, `ResourceExhausted`) | **this worker** is sick | message handed back untouched, worker stops |
+
+Getting the last two confused is the expensive mistake. A wedged GPU misclassified as bad data
+dead-letters an entire healthy stream one message at a time under an error that has nothing to do
+with any of those messages. An unclassified exception defaults to `transient`, so a node that
+opts into nothing keeps the old behaviour.
+
+Always pass `remedy=` (the fix, as its own field — the CLI, the DLQ inspector and the Kubernetes
+termination log each render it) and identifying context as keywords (`node=self.name`,
+`camera=cam`), which become queryable log and DLQ fields. Codes like `VF_POISON_SCHEMA` are
+permanent; messages may be reworded freely.
+
+**Third-party types you cannot subclass** — register the mapping once, in the module that
+actually imports the framework:
+
+```python
+# eager: tf is a module-scope import here (detector_tf/tensorflow_utils.py)
+register_error_classifier(tf.errors.ResourceExhaustedError, WORKER_FATAL)
+
+# lazy: torch must not be module-scope, so register from open() behind a guard
+# (soccer_detector/detector.py is the reference)
+def _torch_oom_type():
+    import torch
+    return getattr(torch.cuda, 'OutOfMemoryError', None)
+
+def _register_torch_classifiers():
+    global _registered
+    if not _registered:
+        _registered = register_classifier_for('torch.cuda.OutOfMemoryError',
+                                              WORKER_FATAL, _torch_oom_type)
+```
+
+A registration in a module nothing imports silently never runs — check the import chain, don't
+assume it. Be conservative: map only what is unambiguous. `tf.errors.InvalidArgumentError` is
+deliberately left alone because it means a bad input shape as often as a bad graph.
+
+Don't wrap `process()` in a bare `try/except: pass`. The task layer already classifies, records
+and dead-letters; swallowing hides the failure from the DLQ and the metrics.
+
 ### Scaling and placement knobs (`ProcessorNode`)
 
 - `nb_tasks=N` — N competing replicas (a Deployment with N replicas). Only safe for
@@ -208,6 +292,10 @@ frozen into that node's params**. Two consequences:
 Resolve every relative config path against the **config file's directory** (not the
 cwd) in `common.py`, so prep, local runs and deploy all agree.
 
+Validate config values with `ConfigError`, naming the config file in the remedy. `deploy` and
+`run-local` render a `VideoflowError` as message + fix and exit 2; a bare `ValueError` gets a
+traceback and exit 1, which CI cannot tell from a crash.
+
 To verify: render with `videoflow deploy <graph>.py --dry-run --no-build
 --no-prepare --image x:1`, then check every path-valued entry of each node's
 `VF_NODE_PARAMS_JSON` falls under one of that workload's `volumeMounts`.
@@ -232,6 +320,12 @@ into the compiled specs. Contract: takes `--config PATH`; is idempotent (check e
 output, skip it with a printed reason, `--force` to redo); exits non-zero with the
 exact manual command when a step needs a human (e.g. a click-UI calibration).
 
+The individual prep steps raise from the taxonomy and their `main()` renders it — see
+`solutions/offside/calibrate.py`: `except VideoflowError` prints `code: message` plus the remedy
+and returns `e.exit_code`, so `prepare.py` and CI can tell "your config is wrong" (2) from "the
+footage is unreadable" (3). `prepare.py`'s own `SystemExit` with the manual command stays as is;
+that message *is* the remedy.
+
 ### Solution Dockerfile
 
 Built from the **repo root** (it COPYs sibling sub-packages). Install the ML stack
@@ -253,3 +347,7 @@ the stack is already resolved), then COPY the solution modules — graph, nodes,
 4. When something fails only in a worker, suspect this list first: a param not stored
    as `self._<name>`, a non-serializable param, a node defined in the graph module,
    heavy work in `__init__`, or a baked path outside a same-path mount.
+5. When messages are being dead-lettered, read the codes before the logs:
+   `videoflow dlq ls --flow-id <id>` groups by code. A stream of `VF_DEVICE` or
+   `VF_RESOURCE_EXHAUSTED` means a sick worker, not bad data — check that the component
+   registered a classifier for whatever its framework raises.

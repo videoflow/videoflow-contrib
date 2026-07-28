@@ -6,6 +6,22 @@ It includes an updated version of Tracktor for Pytorch 1.3 with an improved obje
 
 ## Installing
 
+## Using two GPUs
+
+Tracktor holds two models — the Faster R-CNN detector and the ResNet-50 reid
+network. With the default single-GPU grant both load onto `cuda:0`; granting the
+node a second device puts the detector on `cuda:0` and the reid network on
+`cuda:1`:
+
+```python
+tracker = TracktorFromFrames(gpu_count = 2, name = 'tracker')(frames)
+```
+
+On Kubernetes the pod then requests `nvidia.com/gpu: 2` (both devices on one
+host); under `run-local` the worker gets a two-device `CUDA_VISIBLE_DEVICES`
+block. The devices the worker sees are always exactly the granted ones,
+numbered from 0 (videoflow RFC 0003).
+
 ## Evaluation Results
 This is how the pretrained models provided perform on the `MOT17` Challenge.
 

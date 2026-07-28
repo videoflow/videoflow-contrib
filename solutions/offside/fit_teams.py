@@ -13,10 +13,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 
 import cv2
 import numpy as np
-from common import load_config
+from common import Config, load_config
+from videoflow.core.errors import ResourceUnavailable, VideoflowError
 from videoflow_contrib.soccer_detector import BALL, SoccerDetector
 from videoflow_contrib.team_classifier.fitting import CLASSES, embed_crops, fit_teams, torso_crop
 
@@ -51,19 +53,30 @@ def montage(crops_by_class, out_path, per_class=16, cell=(48, 96)):
     cv2.imwrite(out_path, grid)
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', required=True)
     args = ap.parse_args()
-    cfg = load_config(args.config)
+    # A typed failure prints as message + fix and exits with the code its class
+    # carries (2 = your config, 3 = the world), the same contract the videoflow
+    # CLI honours — prepare.py and CI both read that status.
+    try:
+        return _fit(load_config(args.config))
+    except VideoflowError as e:
+        print(f'{e.code}: {e.message}' + (f'\n  {e.remedy}' if e.remedy else ''),
+              file=sys.stderr)
+        return e.exit_code
 
+
+def _fit(cfg: Config) -> int:
     detector = SoccerDetector(checkpoint=cfg.detector.get('checkpoint'),
                               resolution=int(cfg.detector.get('resolution', 1288)),
                               device_type='cpu')
     detector.open()
 
-    crops, det_classes = [], []
-    montage_by_class = {c: [] for c in CLASSES}
+    crops: list = []
+    det_classes: list = []
+    montage_by_class: dict[str, list] = {c: [] for c in CLASSES}
     for cam in cfg.cameras:
         for fr in sample_frames(cfg.videos[cam], N_PER_CAM):
             dets = detector._detect(fr)
@@ -81,7 +94,13 @@ def main():
                     montage_by_class[name].append(crop)
 
     if len(crops) < 4:
-        raise RuntimeError('too few player crops detected; check the detector/checkpoint')
+        raise ResourceUnavailable(
+            f'only {len(crops)} player crops were detected across all cameras; '
+            f'at least 4 are needed to fit team centroids',
+            remedy = 'Check the detector checkpoint is the soccer one, that the '
+                    'sampled clips actually show players, and lower '
+                    'detector.conf_person if they are being filtered out.',
+            crops = len(crops))
 
     embs = embed_crops(crops, method='hsv')
     centroids = fit_teams(embs, np.array(det_classes), method='hsv')
@@ -90,7 +109,8 @@ def main():
     montage(montage_by_class, os.path.join(cfg.work_dir, 'teams_montage.png'))
     print(f'Wrote {cfg.teams_path()} and teams_montage.png '
           f'({len(crops)} crops). Inspect the montage and set team_names in the config.')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())
