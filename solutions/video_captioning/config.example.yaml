@@ -6,8 +6,15 @@
 # here on this machine.
 work_dir: ./out
 
-# The video to caption (required).
-input_video: /data/video.mp4
+# The video to caption. Leave empty (or omit) to use the bundled sample clip
+# (tears_of_steel_clip.mp4 -- 90s of Blender's CC-BY short film, varied enough
+# that consecutive captions actually differ), which prepare.py downloads into
+# work_dir. It lives in work_dir rather than a shared cache because this path is
+# baked into the reader's parameters at compile time and must resolve to the same
+# absolute location inside the worker pods -- work_dir is mounted at an identical
+# path. Set an absolute path for your own footage and mount it with
+# `--mount /path/to/video.mp4:ro`.
+input_video: ''
 
 # Filename stem for the artifacts: <stem>.srt, <stem>.vtt and <stem>.jsonl inside
 # work_dir. A bare stem — no directory, no extension.

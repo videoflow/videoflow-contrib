@@ -9,17 +9,23 @@ work_dir: ./out
 flow_type: batch
 
 # 2-5 fixed cameras. Order is the fusion input order; the first camera is the
-# audio-sync reference (offset 0).
-cameras:
-  cam0: {video: /data/cam0.mp4}
-  cam1: {video: /data/cam1.mp4}
-  cam2: {video: /data/cam2.mp4}
+# audio-sync reference (offset 0). Leave this empty (or omit it) to use the
+# bundled two-camera sample recording, which prepare.py downloads into work_dir —
+# it lives there rather than in a shared cache because these paths are baked into
+# the readers' parameters at compile time and must resolve to the same absolute
+# location inside the worker pods. Point it at your own footage and mount each
+# file with `--mount /data/cam0.mp4:ro`.
+cameras: {}
+#  cam0: {video: /data/cam0.mp4}
+#  cam1: {video: /data/cam1.mp4}
+#  cam2: {video: /data/cam2.mp4}
 
 # MEASURE these with a tape — amateur pitches vary a lot and the offside line is
-# computed in metres. (FIFA standard is 105 x 68.)
+# computed in metres. (FIFA standard is 105 x 68, which is what the bundled
+# sample was recorded on.)
 pitch:
-  length: 100.0
-  width: 64.0
+  length: 105.0
+  width: 68.0
 
 # 'auto' infers the attack direction per team from the goalkeepers' positions.
 # Override explicitly if auto is unreliable: {0: '+x', 1: '-x'}.
@@ -50,7 +56,7 @@ device:
   pose: cpu
 
 fusion:
-  ref_fps: 30.0
+  ref_fps: 25.0           # your cameras' true frame rate (the bundled sample is 25 fps)
   quorum: 2               # emit a moment with >= 2 camera views
 
 debug_overlays: false     # also write per-camera annotated .avi (tracks/teams/skeletons)

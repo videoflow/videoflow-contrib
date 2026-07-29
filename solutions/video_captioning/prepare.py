@@ -1,6 +1,7 @@
 '''
-Prep for the video-captioning solution: probe the input video and pre-fetch the
-vision-language model into the Hugging Face cache.
+Prep for the video-captioning solution: fetch and probe the input video (the
+bundled sample clip when the config leaves ``input_video`` empty) and pre-fetch
+the vision-language model into the Hugging Face cache.
 
 The model fetch is the reason this hook exists. A 7B VLM is ~16GB of weights;
 without a warm cache the first worker pod stalls for the length of that download
@@ -42,16 +43,20 @@ SECONDS_PER_CAPTION_GUESS = 3.0
 
 def probe_video(cfg: Config) -> dict:
     '''
-    Reads frame count and frame rate off the input video and works out how many
+    Fetches the input video (the bundled sample clip when ``input_video`` is
+    empty), then reads frame count and frame rate off it and works out how many
     captions the configured sampling stride will produce.
 
     - Raises:
         - SystemExit: if the video cannot be opened — a bad path or an \
             unreadable file, which is worth catching here rather than in a pod.
     '''
-    capture = cv2.VideoCapture(cfg.input_video)
+    # fetch_input downloads the sample clip when input_video is empty (build_flow
+    # only ever resolves the path, never downloads).
+    path = cfg.fetch_input()
+    capture = cv2.VideoCapture(path)
     if not capture.isOpened():
-        raise SystemExit(f'cannot open input_video: {cfg.input_video}\n'
+        raise SystemExit(f'cannot open input_video: {path}\n'
                          f'Fix the path in {cfg.path} (and make sure it is mounted into '
                          f'the pods — see x-mounts in config.template.yaml).')
     try:
@@ -65,7 +70,7 @@ def probe_video(cfg: Config) -> dict:
     sampled = frames // cfg.every_n_frames if frames > 0 else 0
     if cfg.max_captions > 0:
         sampled = min(sampled, cfg.max_captions) if sampled else cfg.max_captions
-    return {'frames': frames, 'fps': fps, 'captions': sampled}
+    return {'path': path, 'frames': frames, 'fps': fps, 'captions': sampled}
 
 
 def fetch_model(model_id: str, force: bool = False) -> str:
@@ -111,7 +116,7 @@ def main():
     cfg = load_config(args.config)
 
     info = probe_video(cfg)
-    print(f'==> input video: {cfg.input_video}')
+    print(f'==> input video: {info["path"]}')
     print(f'    {info["frames"]} frames @ {info["fps"]:.2f} fps')
     if info['captions']:
         seconds = info['captions'] * SECONDS_PER_CAPTION_GUESS

@@ -23,7 +23,10 @@ class Detection(object):
     """
 
     def __init__(self, tlwh, confidence, feature):
-        self.tlwh = np.asarray(tlwh, dtype=np.float)
+        # `float`, not `np.float`: the alias was deprecated in NumPy 1.20 and
+        # removed in 1.24, so np.float raises AttributeError on the NumPy the
+        # images ship with. Plain `float` gives the same float64 dtype.
+        self.tlwh = np.asarray(tlwh, dtype=float)
         self.confidence = float(confidence)
         self.feature = np.asarray(feature, dtype=np.float32)
 

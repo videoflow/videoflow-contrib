@@ -5,8 +5,14 @@
 # Where outputs go. Mounted into the pods, so the blurred video lands here.
 work_dir: ./out
 
-# The video to obfuscate (required).
-input_video: /data/video.mp4
+# The video to obfuscate. Leave empty (or omit) to use the bundled sample clip
+# (street_crossing.mp4 -- a busy pedestrian crossing), which prepare.py downloads
+# into work_dir. It lives in work_dir rather than the shared model cache because
+# this path is baked into the reader's parameters at compile time and must
+# resolve to the same absolute location inside the worker pods -- work_dir is
+# mounted at an identical path. Set an absolute path for your own footage and
+# mount it with `--mount /path/to/video.mp4:ro`.
+input_video: ''
 
 # Output filename, written inside work_dir. Must end in .avi — videoflow's
 # VideofileWriter only supports that container.
@@ -27,7 +33,7 @@ detector:
   architecture: ssd-mobilenetv2   # with dataset 'faces' → the face SSD checkpoint
   dataset: faces
   num_classes: 1
-  min_score_threshold: 0.2        # lower catches more faces (and more false blurs)
+  min_score_threshold: 0.1        # lower catches more faces (and more false blurs)
 
 tracker:
   max_age: 12                     # frames a face stays blurred after the detector loses it

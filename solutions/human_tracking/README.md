@@ -86,6 +86,73 @@ python human_tracking.py --config config.yaml [--flow-type batch|realtime]
 
 Output: `<work_dir>/<output_video>` (default `out/annotated_video.avi`).
 
+## The sample clip
+
+`people_walking.mp4` is 75 s of 1280×720 at 25 fps (1879 frames): a pedestrian
+street where people repeatedly cross in front of one another. That is the point —
+the occlusions are what the appearance encoder exists for, and a clip without them
+would not distinguish this solution from a pure motion tracker. It is hosted as a
+release asset alongside the other solutions' samples:
+`https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/people_walking.mp4`.
+
+## Verified run
+
+Run end to end on a local **k3s** cluster on 2026-07-28, one worker pod per graph
+node, all stages on CPU, from the bundled sample with an otherwise stock config
+(only `work_dir` was pointed at a gitignored directory):
+
+```bash
+cd /home/jadiel/workspace/videoflow-contrib
+docker build -f solutions/human_tracking/Dockerfile -t videoflow-human-tracking:r6 .
+
+cd solutions/human_tracking
+videoflow deploy human_tracking.py \
+    --no-build --image videoflow-human-tracking:r6 \
+    --config config.yaml --non-interactive \
+    --namespace videoflow \
+    --flow-id human-tracking --run-id human-tracking-d3 \
+    --gpu-runtime-class nvidia --keep-infra
+```
+
+`--no-build --image <ref>:rN` rather than letting deploy autobuild: autobuild
+tags `:latest`, which Kubernetes defaults to `imagePullPolicy: Always` and
+therefore re-pulls from a registry that hasn't got it. Immutable `:rN` tags get
+`IfNotPresent`, which is what makes a locally imported image usable at all.
+
+It ends with `Flow human-tracking completed.` and writes all 1879 frames of the
+sample to `<work_dir>/annotated_video.avi`.
+
+**Budget the time.** On CPU this took a little over an hour on 32 cores — the
+Detectron2 keypoint model is the whole cost, at roughly 0.5 fps end to end. Watch
+it advance without tailing logs:
+
+```bash
+kubectl exec -n videoflow <writer-pod> -- \
+    python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())" \
+  | grep processed_total
+```
+
+Two things in the output are expected rather than wrong:
+
+- **Boxes labelled `-1`** are tracks DeepSort has not confirmed yet (fewer than
+  `n_init` consecutive hits). In a crowd there are always some.
+- **Overlapping boxes** around one person are the unconfirmed track and the
+  confirmed one drawn together.
+
+Two writer arguments this graph passes explicitly, both because
+`VideofileWriter`'s defaults are wrong for a file-to-file flow — keep them if you
+edit `build_flow`:
+
+- `swap_channels=False`. The reader and the writer disagree about channel order:
+  `VideoFileReader` defaults to `swap_channels=False` (frames stay BGR, which is
+  what `Detectron2HumanPose.process()` documents it wants) while `VideofileWriter`
+  defaults to `swap_channels=True`. Without this the annotated video comes out
+  with **blue skin**.
+- `fps=cfg.fps`. The writer defaults to 30 and cannot know the source rate, so
+  against the 25 fps sample the output played ~20 % fast — same 1879 frames, 63 s
+  instead of 75 s. The `annotated_video.avi` captured for this run predates the
+  fix and still has that timing; set `fps` to match your own footage.
+
 ## Configuration reference (`config.yaml`)
 
 `videoflow deploy` asks for the starred (★) values; everything else has a
@@ -96,6 +163,7 @@ sensible default. Relative paths resolve against the config file's directory.
 | `input_video` | `''` (sample) | The video to process. Empty uses the bundled `people_walking.mp4` sample, which `prepare.py` downloads into `work_dir` (so the pods see it at the same path they were compiled with). Set an absolute path for your own footage and mount it with `--mount`. |
 | `work_dir` | `./out` | Where the annotated video is written. Mounted read-write, so results appear on your machine. |
 | `output_video` | `annotated_video.avi` | Output filename, written inside `work_dir`. The default writer codec pairs with `.avi`. |
+| `fps` | `25` | Frames per second of the written video. **Match your source footage** — the writer cannot know the source rate, so a mismatch makes the output play at the wrong speed. The sample clip is 25 fps. |
 | `device` ★ | `cpu` | `cpu` or `gpu` — sets `device_type` on the pose **and** encoder nodes. `gpu` needs the GPU image and a GPU node (deploy warns if the cluster isn't ready). |
 | `flow_type` ★ | `batch` | `batch` for recorded files: loss-free, backpressured, runs to completion then exits. `realtime` only for a genuine live source — it drops frames to stay current. |
 | `pose.architecture` ★ | `R50_FPN_3x` | Detectron2 keypoint model. `R50_FPN_3x` is the balanced default; `R101_FPN_3x` / `X101_FPN_3x` are more accurate and slower; `R50_FPN_1x` is faster and weaker. |

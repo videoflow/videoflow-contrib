@@ -26,12 +26,16 @@ DEVICES = ('cpu', 'gpu')
 FLOW_TYPES = ('batch', 'realtime')
 MISSING_POLICIES = ('wait', 'drop', 'error')
 
+BASE_URL_EXAMPLES = 'https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/'
+SAMPLE_VIDEO_NAME = 'tears_of_steel_clip.mp4'
+SAMPLE_VIDEO_URL = BASE_URL_EXAMPLES + SAMPLE_VIDEO_NAME
+
 
 @dataclass
 class Config:
     path: str
     work_dir: str
-    input_video: str
+    input_video: str                   # '' means "use the downloaded sample"
     output_basename: str
     every_n_frames: int
     max_captions: int
@@ -64,6 +68,35 @@ class Config:
     def jsonl_path(self) -> str:
         '''The live, append-as-you-go caption log.'''
         return self.work_path(f'{self.output_basename}.jsonl')
+
+    def resolve_input(self) -> str:
+        '''
+        The path the reader opens: the configured video, or the sample clip inside
+        ``work_dir``.
+
+        The sample deliberately lives in work_dir rather than a shared cache,
+        because this path is baked into the reader's parameters at compile time
+        and must resolve to the *same* absolute location inside the worker pods —
+        work_dir is mounted at an identical path, whereas the Hugging Face cache
+        is remapped onto the container's ``/root``.
+
+        Deliberately does NOT download: compiling a graph must stay side-effect
+        free (``--dry-run`` would otherwise pull the clip and write progress onto
+        stdout). ``prepare.py`` calls ``fetch_input`` to populate it before the
+        workers run.
+        '''
+        if self.input_video:
+            return self.input_video
+        return os.path.join(self.work_dir, SAMPLE_VIDEO_NAME)
+
+    def fetch_input(self) -> str:
+        '''Downloads the sample clip into work_dir if needed; returns the path (used by prepare.py).'''
+        if self.input_video:
+            return self.input_video
+        from videoflow.utils.downloader import get_file
+        # cache_subdir='' puts it directly in work_dir, matching resolve_input().
+        return get_file(SAMPLE_VIDEO_NAME, SAMPLE_VIDEO_URL,
+                        cache_dir=self.work_dir, cache_subdir='')
 
     def reader_nb_frames(self) -> int:
         '''
@@ -99,12 +132,9 @@ def load_config(path: str) -> Config:
     cfg_dir = os.path.dirname(os.path.abspath(path))
     cfg_path = os.path.abspath(path)
 
-    input_video = raw.get('input_video')
-    if not input_video:
-        raise ConfigError('input_video is not set.',
-                        remedy = f'Set input_video to the path of the video to caption '
-                                f'in {cfg_path}.',
-                        config = cfg_path)
+    input_video = raw.get('input_video') or ''
+    if input_video:
+        input_video = os.path.abspath(os.path.join(cfg_dir, input_video))
 
     work_dir = os.path.abspath(os.path.join(cfg_dir, raw.get('work_dir', './out')))
     os.makedirs(work_dir, exist_ok=True)
@@ -188,7 +218,7 @@ def load_config(path: str) -> Config:
     return Config(
         path=cfg_path,
         work_dir=work_dir,
-        input_video=os.path.abspath(os.path.join(cfg_dir, input_video)),
+        input_video=input_video,
         output_basename=output_basename,
         every_n_frames=every_n_frames,
         max_captions=max_captions,

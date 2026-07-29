@@ -35,7 +35,9 @@ def non_max_suppression(boxes, max_bbox_overlap, scores=None):
     if len(boxes) == 0:
         return []
 
-    boxes = boxes.astype(np.float)
+    # `float`, not `np.float`: the alias was deprecated in NumPy 1.20 and removed
+    # in 1.24, so np.float raises AttributeError on current NumPy. Same dtype.
+    boxes = boxes.astype(float)
     pick = []
 
     x1 = boxes[:, 0]

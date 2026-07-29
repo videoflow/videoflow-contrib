@@ -61,6 +61,39 @@ calibration) are isolated — the rest of the stack is permissive.
 - **Measure the pitch** length and width with a tape (amateur pitches vary; the
   offside line is computed in metres).
 
+## The sample recording
+
+Leaving `cameras` empty uses a bundled two-camera sample so the solution has a
+zero-configuration demo. `prepare.py` downloads `offside_cam0.mp4` and
+`offside_cam1.mp4` from the release into `work_dir`:
+
+    https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/offside_cam0.mp4
+    https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/offside_cam1.mp4
+
+They are 18-second, 1920×1080, 25 fps excerpts of two of the six genlocked views
+in the **ISSIA-CNR Soccer** dataset (D'Orazio et al., Istituto di Studi sui
+Sistemi Intelligenti per l'Automazione, CNR) — a Serie A match filmed by fixed
+cameras with the pitch markings in view. The two views look at the *same* penalty
+area from opposite sidelines, which is what makes them usable for triangulation:
+a pair on one sideline would have almost no baseline. `offside_cam1.mp4` is
+horizontally flipped relative to the published `filmrole2.avi`, because that file
+ships mirrored; without un-mirroring it the two cameras disagree about which way
+the pitch runs and every reconstructed position is wrong.
+
+Two things about the sample differ from your own recording, and `prepare.py`
+handles both:
+
+- **It carries no audio**, so `sync_offsets.py` has nothing to cross-correlate.
+  It does not need to: the six ISSIA cameras were genlocked, so prep writes a
+  zero-offset `offsets.json` directly rather than measuring one.
+- **It is 25 fps**, which is why `fusion.ref_fps` defaults to `25.0`.
+
+Calibration and the team-colour fit run normally on it (automatic calibration
+solves at ≈4 px RMS on both views).
+
+The dataset is distributed for research use and carries no explicit licence; treat
+the clips as a test fixture rather than as material to redistribute further.
+
 ## Deploying to Kubernetes (one command)
 
 With a local cluster (k3s / kind / minikube / Docker Desktop) and docker + kubectl
@@ -73,9 +106,12 @@ videoflow deploy offside.py
 ```
 
 That single command:
-1. asks for the config inputs (video paths, pitch dims, team names, flow type)
-   and writes `config.yaml` — driven by `config.template.yaml`; skipped when a
-   `config.yaml` already exists or `--config` is passed;
+1. asks for the config inputs (pitch dims, frame rate, team names, flow type) and
+   writes `config.yaml` — driven by `config.template.yaml`; skipped when a
+   `config.yaml` already exists or `--config` is passed. Leaving `cameras` empty
+   (the default) uses the bundled two-camera sample recording, which `prepare.py`
+   downloads into `work_dir`; for your own footage fill `cameras` in and add
+   `--mount /data/cam0.mp4:ro` per file;
 2. builds the solution image from `gpu.Dockerfile` (auto-building the
    `videoflow-base` image first if missing) and loads it into the detected
    cluster flavor — skipped with `--image <ref>` / `--no-build`;
@@ -114,7 +150,11 @@ cd solutions/offside
 python prepare.py --config config.yaml
 ```
 
-Or the three steps by hand:
+`prepare.py` also fetches the input videos first — the bundled sample when
+`cameras` is empty, nothing when you supplied your own.
+
+Or the three steps by hand (your own footage; the sample's offsets are written by
+`prepare.py`, see [The sample recording](#the-sample-recording)):
 
 ```bash
 cd solutions/offside
@@ -180,7 +220,7 @@ Relative paths resolve against the config file's directory.
 |---|---|---|
 | `work_dir` | `./out` | Where every artifact goes: prep outputs (`offsets.json`, `calib/`, `teams.json`) and `results/`. Mounted into the pods, so results appear on this machine. |
 | `flow_type` ★ | `batch` | `batch` for recorded clips: loss-free, backpressured, runs to completion then exits. `realtime` for a genuine live source: freshest-frame-wins, a straggler can't stall verdicts, but frames drop if the source outruns the fuser. Only use `realtime` with a live/RTSP-cadence producer, never fast file replay. |
-| `cameras.<cam>.video` ★ | — | One entry per camera (2–5), e.g. `cam0: {video: /data/cam0.mp4}`. **Order matters**: it is the fusion input order, and the first camera is the audio-sync reference (offset 0). Fixed tripod cameras with audio, ideally covering both penalty areas from different angles. |
+| `cameras.<cam>.video` | `{}` (sample) | One entry per camera (2–5), e.g. `cam0: {video: /data/cam0.mp4}`. **Order matters**: it is the fusion input order, and the first camera is the audio-sync reference (offset 0). Fixed tripod cameras with audio, ideally covering both penalty areas from different angles. Empty uses the bundled two-camera sample recording (see [The sample recording](#the-sample-recording)); mount your own files with `--mount`. |
 | `pitch.length` ★ | `105.0` | Pitch length in metres. **Measure it** — amateur pitches vary a lot and the offside line is computed in metres (FIFA standard 105). |
 | `pitch.width` ★ | `68.0` | Pitch width in metres (FIFA standard 68). |
 | `attack_direction` | `auto` | Which way each team attacks. `auto` infers it per team from the goalkeepers' positions; override with `{0: '+x', 1: '-x'}` (team id → direction along the pitch length axis) when auto is unreliable (e.g. short clips without keepers in view). |
@@ -190,9 +230,9 @@ Relative paths resolve against the config file's directory.
 | `detector.resolution` | `1288` | Detector input resolution (must be divisible by 56). Raise it when the ball is small/distant; costs GPU time quadratically. |
 | `detector.conf_ball` | `0.15` | Ball detection confidence threshold. Lower it if the ball is missed (more false positives for the tracker to filter). |
 | `detector.tile_inference` | `false` | Split each frame into tiles and detect per tile — recovers very distant balls at a large speed cost. |
-| `fusion.ref_fps` | `30.0` | Rate of the fused 3D world-state stream. Match your cameras' true fps. |
+| `fusion.ref_fps` ★ | `25.0` | Rate of the fused 3D world-state stream. Match your cameras' true fps (the bundled sample is 25 fps). |
 | `fusion.quorum` | `2` | Minimum number of cameras that must see a moment before it is fused. `2` is the minimum for 3D triangulation; raise with more cameras for robustness. |
-| `debug_overlays` | `false` | Also write per-camera annotated `.avi` (tracks/teams/skeletons) and `world_states.jsonl` — slow, for debugging the pipeline. |
+| `debug_overlays` | `false` | Also write `world_states.jsonl` — one JSON record per fused moment (every triangulated player and the ball, in pitch metres). Slow and large, for debugging the pipeline. |
 
 Prep artifacts consumed at compile time (produced by `prepare.py`, all under
 `work_dir`): `offsets.json` (per-camera audio-sync offset + drift), `calib/<cam>.json`
@@ -323,9 +363,66 @@ Linux/GPU or Apple Silicon.
 Weights download at runtime from their upstream sources with a durable GitHub-release
 fallback (see above); pre-fetch with `download_weights.py` for offline/container runs.
 The maintainer step of uploading the mirror release itself is a one-time ops task.
-Not yet done: the full **distributed flow** end-to-end (needs NATS + Redis + Docker +
-multi-camera footage). Two inherent limits,
-documented rather than hidden: sub-frame kick timing is frame-rate-limited (~±1 frame
-at 30 fps — why FIFA uses a 500 Hz ball IMU), and the ground-point back-projection is
-association-grade (~0.2–0.3 m at range; the precise offside line uses the triangulated
-3D keypoints, not the ground point).
+
+The full **distributed flow** has now been run end to end on Kubernetes against the
+bundled two-camera sample (2026-07-28): 22 worker pods, 4 GPU units, prep →
+calibration → team fit → 450 fused world states → 57 detected ball touches →
+`verdicts.json`, with a clean teardown.
+
+```bash
+cd /home/jadiel/workspace/videoflow-contrib
+docker build -f solutions/offside/gpu.Dockerfile -t videoflow-offside:r11 .
+
+cd solutions/offside
+videoflow deploy offside.py \
+    --no-build --image videoflow-offside:r11 \
+    --config config.yaml --non-interactive \
+    --namespace videoflow \
+    --flow-id offside --run-id offside-d2 \
+    --gpu-runtime-class nvidia --keep-infra
+```
+
+Prep reported `cam0: RMS 3.98 px (8 landmarks) [OK]` / `cam1: RMS 4.69 px
+(8 landmarks) [OK]` and fitted team colours over 1300 crops; the flow then
+produced 450 world states for 450 frames — the event-time join lost nothing —
+and deploy ended with `Flow offside completed.`
+
+Two things about the config used: `work_dir` pointed at a gitignored directory
+(prep and the workers run as root in-image, so its output is root-owned), and
+`debug_overlays: true`, which is what writes `world_states.jsonl`. GPU demand is
+one device per `gpu` stage **per camera** — with `{detector: gpu, tracker: cpu,
+pose: gpu}` and two cameras that is 4.
+
+Getting there needed one fix in `offside_nodes.py`, worth knowing before you add
+a glue node of your own: `FrameIndexSplitter` unpacked the reader's
+`(index, frame)` pair with `isinstance(item, tuple)`. **msgpack has no tuple
+type**, so in a distributed worker that pair arrives as a *list*, the guard
+fails, the whole pair reaches the detector and every frame dead-letters as
+`SchemaError [VF_POISON_SCHEMA]: expected an (h, w, 3) frame, got list`. The bug
+is invisible in-process and fatal over the wire, which is exactly why the
+distributed flow had never completed before. Match on the shape of the payload,
+not on its Python type.
+
+**It produced zero verdicts, and that is a known defect rather than a property of
+the clip.** Every one of the 9968 player observations came back `nviews: 1` — no
+player was ever seen by two cameras at once, so nothing was triangulated and the
+engine could not attribute any touch to a player (`toucher_gid: null` throughout).
+The reason is that the two cameras' calibrations do not share a world frame:
+`pitch_calib` placed two views from **opposite** sidelines 2 m apart and below the
+pitch plane (`z ≈ −19 m`), at 4 px reprojection RMS. It reproduces on a second,
+independent ISSIA camera pair that solves at sub-pixel RMS. The cause is the
+two-fold ambiguity of the planar-homography decomposition in
+`pitch_calib.solve.extrinsics_from_homography`, which disambiguates only on
+"world origin in front of the camera" (`t_z > 0`) — necessary, but not enough to
+pin which side of the pitch plane the camera sits on, so every camera lands on the
+same branch. **Single-camera use is unaffected** (the homography, and every
+image↔ground mapping through it, is correct); it breaks multi-camera fusion
+specifically, which is the configuration this solution is built around. Fixing it
+needs a `pitch_calib` change with its own tests: guessing the branch wrong does not
+fail loudly, it yields confident mirrored verdicts.
+
+Two further limits are inherent rather than defects, and documented rather than
+hidden: sub-frame kick timing is frame-rate-limited (~±1 frame at 30 fps — why FIFA
+uses a 500 Hz ball IMU), and the ground-point back-projection is association-grade
+(~0.2–0.3 m at range; the precise offside line uses the triangulated 3D keypoints,
+not the ground point).

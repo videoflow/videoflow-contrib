@@ -9,7 +9,7 @@ pitch:
   length: 105.0
   width: 68.0
 attack_direction: auto
-team_names: {0: Reds, 1: Blues}
+team_names: {0: Whites, 1: Blues}
 trim: {start_s: null, end_s: null}
 detector:
   checkpoint: null
@@ -24,18 +24,15 @@ device:
   tracker: cpu
   pose: cpu
 fusion:
-  ref_fps: 30.0
+  ref_fps: 25.0
   quorum: 2
 debug_overlays: false
 
 # Inputs `videoflow deploy` asks for when generating config.yaml (stripped from
-# the generated file).
+# the generated file). `cameras` is deliberately absent: leaving it empty uses the
+# bundled two-camera sample recording, and an operator with their own footage
+# fills it in in config.yaml (and adds a --mount per file).
 x-questions:
-  - key: cameras
-    prompt: 'Video file per camera, in order (first = audio-sync reference), comma-separated'
-    type: paths
-    item_key: 'cam{i}'
-    item_value: {video: '{path}'}
   - key: pitch.length
     prompt: 'Pitch length in metres (measure it; FIFA standard 105)'
     type: float
@@ -44,10 +41,14 @@ x-questions:
     prompt: 'Pitch width in metres (FIFA standard 68)'
     type: float
     default: 68.0
+  - key: fusion.ref_fps
+    prompt: "Your cameras' frame rate (the bundled sample is 25 fps)"
+    type: float
+    default: 25.0
   - key: team_names.0
     prompt: 'Name of team 0'
     type: str
-    default: Reds
+    default: Whites
   - key: team_names.1
     prompt: 'Name of team 1'
     type: str

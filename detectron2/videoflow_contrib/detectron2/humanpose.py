@@ -83,6 +83,11 @@ class HumanPoseAnnotator(ProcessorNode):
         - Returns:
             - im: np.array of shape (h, w, 3) annotated with keypoints on it.
         '''
+        # Draw into a copy, matching videoflow's ImageAnnotator contract ("returns
+        # a copy of im"). A frame that arrived over the wire is backed by a
+        # read-only buffer, and OpenCV refuses to draw into one: "img marked as
+        # output argument, but provided NumPy array marked as readonly".
+        im = np.array(im)
         for _, person_keypoints in enumerate(frame_keypoints):
             visible = {}
             for idx, keypoint in enumerate(person_keypoints):

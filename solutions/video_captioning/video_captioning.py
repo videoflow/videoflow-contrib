@@ -69,7 +69,7 @@ def build_flow(cfg=None):
         cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
     from videoflow_contrib.vlm_caption import VlmCaptioner
 
-    reader = SampledVideoFileReader(cfg.input_video,
+    reader = SampledVideoFileReader(cfg.resolve_input(),
                                     every_n_frames=cfg.every_n_frames,
                                     nb_frames=cfg.reader_nb_frames(),
                                     name='reader')

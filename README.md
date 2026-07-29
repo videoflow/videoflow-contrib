@@ -80,6 +80,21 @@ Each asks for its inputs the first time, writes a `config.yaml`, builds and load
 its image, provisions a dev broker, runs, and tears down. See each solution's
 README for its configuration reference.
 
+**None of them needs footage of your own to run.** Each ships a sample clip on the
+[`example_videos`](https://github.com/videoflow/videoflow-contrib/releases/tag/example_videos)
+release, which its `prepare.py` downloads into `work_dir` when the input is left
+empty — so the deploy command above is genuinely the whole thing:
+
+| Solution | Sample input | Source |
+|---|---|---|
+| face_obfuscation | `street_crossing.mp4` (13 s, 720p25) | Wikimedia Commons, CC0 — a busy pedestrian crossing |
+| human_tracking | `people_walking.mp4` (75 s, 720p25) | — |
+| video_captioning | `tears_of_steel_clip.mp4` (90 s, 1280×534, 24 fps) | Blender Foundation, CC BY 3.0 |
+| offside | `offside_cam0.mp4` + `offside_cam1.mp4` (18 s, 1080p25) | two genlocked views of one penalty area, from ISSIA-CNR |
+
+Point the input at your own file and add `--mount /path/to/video.mp4:ro` to use
+it instead.
+
 > **Looking for the toy solutions?** `toy_calculator`, `toy_fusion` and
 > `toy_router` moved to the core repo:
 > [videoflow/solutions](https://github.com/videoflow/videoflow/tree/master/solutions),

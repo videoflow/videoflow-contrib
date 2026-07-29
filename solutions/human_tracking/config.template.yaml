@@ -5,6 +5,7 @@
 work_dir: ./out
 input_video: ''
 output_video: annotated_video.avi
+fps: 25
 device: cpu
 flow_type: batch
 pose:

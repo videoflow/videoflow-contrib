@@ -6,6 +6,9 @@ returns a Config with every path resolved to an absolute location **relative to
 the config file's directory**, not the process cwd — so the prep script, a local
 run, and ``videoflow deploy`` (which compiles the graph from any cwd) all bake
 the same paths into the node parameters.
+
+``input_video`` may be left empty to use the bundled sample clip, which is
+downloaded into ``work_dir`` by ``prepare.py`` and referenced from there.
 '''
 from __future__ import annotations
 
@@ -15,12 +18,16 @@ from dataclasses import dataclass, field
 import yaml
 from videoflow.core.errors import ConfigError
 
+BASE_URL_EXAMPLES = 'https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/'
+SAMPLE_VIDEO_NAME = 'street_crossing.mp4'
+SAMPLE_VIDEO_URL = BASE_URL_EXAMPLES + SAMPLE_VIDEO_NAME
+
 
 @dataclass
 class Config:
     path: str
     work_dir: str
-    input_video: str
+    input_video: str                   # '' means "use the downloaded sample"
     output_video: str
     fps: int
     device: str                        # 'cpu' or 'gpu'
@@ -37,6 +44,35 @@ class Config:
     def output_path(self) -> str:
         return self.work_path(self.output_video)
 
+    def resolve_input(self) -> str:
+        '''
+        The path the reader opens: the configured video, or the sample clip inside
+        ``work_dir``.
+
+        The sample deliberately lives in work_dir rather than the shared videoflow
+        model cache, because this path is baked into the reader's parameters at
+        compile time and must resolve to the *same* absolute location inside the
+        worker pods — work_dir is mounted at an identical path, whereas the model
+        cache is remapped onto the container's ``/root``.
+
+        Deliberately does NOT download: compiling a graph must stay side-effect
+        free (``--dry-run`` would otherwise pull the clip and write progress onto
+        stdout). ``prepare.py`` calls ``fetch_input`` to populate it before the
+        workers run.
+        '''
+        if self.input_video:
+            return self.input_video
+        return os.path.join(self.work_dir, SAMPLE_VIDEO_NAME)
+
+    def fetch_input(self) -> str:
+        '''Downloads the sample clip into work_dir if needed; returns the path (used by prepare.py).'''
+        if self.input_video:
+            return self.input_video
+        from videoflow.utils.downloader import get_file
+        # cache_subdir='' puts it directly in work_dir, matching resolve_input().
+        return get_file(SAMPLE_VIDEO_NAME, SAMPLE_VIDEO_URL,
+                        cache_dir=self.work_dir, cache_subdir='')
+
 
 def load_config(path: str) -> Config:
     with open(path) as f:
@@ -47,12 +83,9 @@ def load_config(path: str) -> Config:
     # a VideoflowError as message + remedy and exit 2, so a typo in the config
     # reads as "here is the fix" instead of a traceback with exit 1.
     cfg_path = os.path.abspath(path)
-    input_video = raw.get('input_video')
-    if not input_video:
-        raise ConfigError('input_video is not set.',
-                        remedy = f'Set input_video to the path of the video to '
-                                f'obfuscate in {cfg_path}.',
-                        config = cfg_path)
+    input_video = raw.get('input_video') or ''
+    if input_video:
+        input_video = os.path.abspath(os.path.join(cfg_dir, input_video))
 
     work_dir = os.path.abspath(os.path.join(cfg_dir, raw.get('work_dir', './out')))
     os.makedirs(work_dir, exist_ok=True)
@@ -82,7 +115,7 @@ def load_config(path: str) -> Config:
     return Config(
         path=cfg_path,
         work_dir=work_dir,
-        input_video=os.path.abspath(os.path.join(cfg_dir, input_video)),
+        input_video=input_video,
         # Relative to work_dir (which is already absolute), so results land next
         # to the other artifacts and the whole directory is one mount.
         output_video=output_video,

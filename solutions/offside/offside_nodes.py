@@ -42,7 +42,14 @@ def _as_detections(dets, node: str) -> np.ndarray:
 class FrameIndexSplitter(ProcessorNode):
     '''(frame_idx, frame) → frame.'''
     def process(self, item):
-        return item[1] if isinstance(item, tuple) else item
+        # `tuple` alone is not enough: msgpack has no tuple type, so the reader's
+        # (index, frame) pair arrives at a *distributed* worker as a list, and an
+        # isinstance(item, tuple) guard silently forwards the whole pair. The
+        # detector then rejects it as poison ('expected an (h, w, 3) frame, got
+        # list') and every frame dead-letters. Match on the pair, not the type.
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            return item[1]
+        return item
 
 
 class PersonBoxes(ProcessorNode):

@@ -29,6 +29,7 @@ class Config:
     work_dir: str
     input_video: str                   # '' means "use the downloaded sample"
     output_video: str
+    fps: int                           # frame rate of the written video
     device: str                        # 'cpu' or 'gpu'
     flow_type: str                     # 'batch' or 'realtime'
     pose: dict = field(default_factory=dict)
@@ -108,6 +109,7 @@ def load_config(path: str) -> Config:
         # Relative to work_dir (already absolute), so results land next to the
         # other artifacts and the whole directory is one mount.
         output_video=raw.get('output_video', 'annotated_video.avi'),
+        fps=int(raw.get('fps', 25)),
         device=device,
         flow_type=flow_type,
         pose=raw.get('pose', {}),

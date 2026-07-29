@@ -72,7 +72,15 @@ def build_flow(cfg=None):
         name='tracker')(tracker_input)
     tracks_anotator_input = ConvertTracksForAnotation(name='convert-tracks')(tracks)
     anotated_tracks = TrackerAnnotator(name='track-annotator')(anotated_keypoints, tracks_anotator_input)
-    writer = VideofileWriter(cfg.output_path(), name='writer')(anotated_tracks)
+    # swap_channels=False because the frames are already BGR — which is what
+    # Detectron2HumanPose.process() documents it wants, and what VideoFileReader
+    # produces (it defaults to swap_channels=False, unlike its VideostreamReader
+    # base). Leaving the writer's own default (True) on swaps them once and the
+    # annotated video comes out with blue skin.
+    # fps is passed explicitly: VideofileWriter defaults to 30, so a 25 fps source
+    # would come out playing ~20% fast (same frames, shorter video).
+    writer = VideofileWriter(cfg.output_path(), swap_channels=False, fps=cfg.fps,
+                             name='writer')(anotated_tracks)
     return Flow([writer], flow_type=cfg.flow_type)
 
 

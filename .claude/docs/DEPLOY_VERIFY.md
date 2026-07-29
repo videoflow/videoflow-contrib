@@ -306,26 +306,27 @@ moments emit at quorum (`views < expected_views`), which is correct behaviour, n
 The cheapest target: CPU only, one input, no prep beyond a weights fetch. The best first proof
 that the framework path works end to end. Build with the **CPU** `Dockerfile`; GPU demand 0.
 
-`load_config` raises `ConfigError` (`VF_CONFIG`, exit 2) if `input_video` is unset — there is no
-bundled default — and `output_video` **must end in `.avi`** (`VideofileWriter` supports nothing
-else). Both print the fix under the message rather than a traceback.
+Needs **no external footage** — an empty `input_video` makes `prepare.py` download the
+`street_crossing.mp4` sample (13 s, 720p25, a dense pedestrian crowd) into `work_dir`, the same
+pattern human_tracking uses and for the same reason: that path is baked into the reader's params
+and `work_dir` is the same-path mount. `output_video` **must end in `.avi`**
+(`VideofileWriter` supports nothing else); the `ConfigError` prints the fix rather than a traceback.
 
 ```yaml
 # solutions/face_obfuscation/config.yaml
 work_dir: ./out_nocommit
-input_video: /home/jadiel/workspace/videoflow-contrib/solutions/offside/data_nocommit/cam0.mp4
+input_video: ''
 output_video: blurred_video.avi
-fps: 30
+fps: 25
 device: cpu
 flow_type: batch
-detector: {architecture: ssd-mobilenetv2, dataset: faces, num_classes: 1, min_score_threshold: 0.2}
+detector: {architecture: ssd-mobilenetv2, dataset: faces, num_classes: 1, min_score_threshold: 0.1}
 tracker: {max_age: 12, min_hits: 0}
 blur: {expand: 0.20, kernel: 23, sigma: 30}
 ```
 
-The offside clips are soccer wide shots, so the detector will find few or no faces — that still
-exercises the whole pipeline and still writes the output. For a semantically meaningful run, use
-human_tracking's `people_walking.mp4` sample instead, once its prep hook has downloaded it.
+`min_score_threshold: 0.1` is the shipped default and what the sample needs — it is a wide street
+scene whose faces are 20–100 px. At that threshold the detector finds ~5 faces per frame.
 
 Success artifact: `out_nocommit/blurred_video.avi`, non-empty, fresh mtime.
 
@@ -343,6 +344,7 @@ plausible blocker. Build with the **CPU** `Dockerfile`; GPU demand 0.
 work_dir: ./out_nocommit
 input_video: ''
 output_video: annotated_video.avi
+fps: 25                  # the sample is 25 fps; the writer's own default is 30
 device: cpu
 flow_type: batch
 pose: {architecture: R50_FPN_3x}
@@ -351,6 +353,17 @@ tracker: {min_height: 0, max_cosine_distance: 0.2, nn_budget: null}
 ```
 
 Success artifact: `out_nocommit/annotated_video.avi`, non-empty, fresh mtime.
+
+**Budget over an hour** for this one on CPU — the Detectron2 keypoint model runs
+at roughly 0.5 fps end to end over 1879 frames, which is far longer than the
+900 s the CPU ML solutions are otherwise wrapped in. Poll the writer rather than
+guessing:
+
+```bash
+kubectl exec -n videoflow <writer-pod> -- \
+    python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/metrics').read().decode())" \
+  | grep processed_total          # counts up to 1879
+```
 
 ### `video_captioning` — the multi-GPU one
 
@@ -371,10 +384,10 @@ Two things gate it before the cluster, and both cost more than the deploy does:
 ```yaml
 # solutions/video_captioning/config.yaml
 work_dir: ./out_nocommit
-input_video: /home/jadiel/workspace/videoflow-contrib/solutions/human_tracking/out_nocommit/people_walking.mp4
+input_video: ''          # empty => prepare.py downloads tears_of_steel_clip.mp4 (90 s) into work_dir
 output_basename: captions
-every_n_frames: 60
-max_captions: 5          # bound the first run; -1 is an overnight job on real footage
+every_n_frames: 48       # the sample is 24 fps, so this is one caption per 2 s -> 45 captions
+max_captions: -1         # bound a first run against long footage with e.g. 5 instead
 device: gpu
 flow_type: batch
 cues: {min_seconds: 1.0, max_seconds: 5.0}
@@ -396,39 +409,45 @@ the run is in flight — the `.srt` only appears at `close()`. An empty `.srt` w
 
 ### `offside` — the GPU one, and the most likely to fail
 
-Three cameras, a multi-parent join, and the only GPU demand: **3** — one detector per camera, with
-tracker and pose on CPU — against the cluster's 4, so `exclusive` works. Build with
-`gpu.Dockerfile`.
+A camera pipeline per view, a multi-parent join, and the only real GPU demand. Build with
+`gpu.Dockerfile`. Demand is one device per `gpu` stage **per camera**: with the two-camera sample
+and `{detector: gpu, tracker: cpu, pose: gpu}` that is 4, exactly the cluster's allocatable — add a
+third camera, or put pose on CPU, if something else needs a device.
 
-**`work_dir` must be `./out_nocommit`.** `prepare.py` runs `weights → sync_offsets → calibrate →
-fit_teams`, skipping any step whose output already exists, and **hard-exits telling you to run a
-manual click-UI on a machine with a display** if automatic calibration fails. `out_nocommit/`
-already holds `calib/cam{0,1,2}.json`, `teams.json` and `offsets.json`, so pointing `work_dir`
-there skips all three. It is load-bearing twice over: `build_flow` also calls `cfg.load_offsets()`
-and `cfg.load_teams()` at compile time, and both `open()` unconditionally. Point it at the default
-`./out` and you get a phantom human-in-the-loop blocker that is really a config error.
+Needs **no external footage** — an empty `cameras` makes `prepare.py` download the two-camera
+sample (`offside_cam0.mp4` / `offside_cam1.mp4`, 18 s of ISSIA-CNR, 1080p25) into `work_dir`. The
+sample has no audio and was genlocked, so prep writes a zero-offset `offsets.json` instead of
+running `sync_offsets.py` on it; calibration and the team fit run normally (automatic calibration
+solves at ≈4 px RMS on both views).
+
+**Put `work_dir` somewhere `*_nocommit*`** — prep and the workers run as root in-image, so its
+output is root-owned. `prepare.py` runs `videos → weights → sync_offsets → calibrate → fit_teams`,
+skipping any step whose output already exists, and **hard-exits telling you to run a manual
+click-UI on a machine with a display** if automatic calibration fails. Reusing a work_dir that
+already holds `calib/*.json`, `teams.json` and `offsets.json` skips all three. That matters twice
+over: `build_flow` also calls `cfg.load_offsets()` and `cfg.load_teams()` at compile time, and both
+`open()` unconditionally, so a work_dir without them fails the compile, not the run.
 
 ```yaml
 # solutions/offside/config.yaml
-work_dir: ./out_nocommit
+work_dir: ./out_nocommit_issia
 flow_type: batch
-cameras:
-  cam0: {video: data_nocommit/cam0.mp4}
-  cam1: {video: data_nocommit/cam1.mp4}
-  cam2: {video: data_nocommit/cam2.mp4}
+cameras: {}              # empty => prepare.py downloads the two-camera sample into work_dir
 pitch: {length: 105.0, width: 68.0}
 attack_direction: auto
-team_names: {0: Reds, 1: Blues}
+team_names: {0: Whites, 1: Blues}
 trim: {start_s: null, end_s: null}
-detector: {checkpoint: null, resolution: 1288, conf_ball: 0.15, tile_inference: false}
-device: {detector: gpu, tracker: cpu, pose: cpu}
-fusion: {ref_fps: 30.0, quorum: 2}
-debug_overlays: false
+detector: {checkpoint: null, resolution: 1288, conf_ball: 0.10, tile_inference: false}
+device: {detector: gpu, tracker: cpu, pose: gpu}
+fusion: {ref_fps: 25.0, quorum: 2}    # the sample is 25 fps
+debug_overlays: true                  # also writes world_states.jsonl
 ```
 
-Camera paths relative to the config dir are correct and consistent: `common.load_config` joins them
-against the config dir and `resolve_mounts` joins the same raw values against the graph dir,
-producing identical absolute paths — which is what a same-path mount requires.
+For your own footage, camera paths relative to the config dir are correct and consistent:
+`common.load_config` joins them against the config dir and `resolve_mounts` joins the same raw
+values against the graph dir, producing identical absolute paths — which is what a same-path mount
+requires. With `cameras: {}` the `{cameras.*.video}:ro` x-mount expands to nothing, which is
+right: the sample lives inside the already-mounted `work_dir`.
 
 Success artifact: `out_nocommit/results/verdicts.json`. The visualizer writes it in `close()`
 **unconditionally**, so it appears even on a clip with zero offside events. The per-verdict files
@@ -437,6 +456,27 @@ absence is not a failure.**
 
 `prepare.py` also runs `download_weights.py` (RF-DETR + RTMW pose) relying on the `get_file` cache;
 the first run pays the download and a dead mirror is an infra blocker.
+
+### Run one flow at a time — the dev Redis is 4 GB and evicts
+
+`infra.py` provisions Redis with `--maxmemory 4gb --maxmemory-policy volatile-lru`, deliberately:
+every blob carries a TTL, so under pressure it drops the oldest rather than OOM-ing the node. The
+cost is that a working set past 4 GB is **silently truncated** — the consumer gets
+`KeyError: Blob vf-blob-… not found (expired or never existed)` on messages whose frames are gone,
+logs one line per message, and finishes with a short artifact rather than a failure.
+
+Frames go to the blob store at >512 KB, so 720p costs ~2.7 MB and 1080p ~6.2 MB per hop. Three
+concurrent flows overran it here (`redis-cli info stats` → `evicted_keys: 1117`, 28 of 45 captions
+lost). **Run the solutions sequentially**, and check `evicted_keys` after a run whose artifact
+looks short:
+
+```bash
+kubectl exec -n videoflow deploy/redis -- redis-cli info stats | grep evicted_keys
+```
+
+For a long 1080p run, bring a bigger Redis instead — a pre-existing `redis` Service in the
+namespace is reused, not replaced, so applying your own Deployment+Service named `redis` with
+`--maxmemory 24gb` before the first deploy is all it takes.
 
 ### Summary
 
@@ -447,8 +487,16 @@ the first run pays the download and a dead mirror is an infra blocker.
 | `toy_fusion` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
 | `face_obfuscation` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
 | `human_tracking` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
-| `video_captioning` | contrib | `gpu.Dockerfile` | `workers × gpu_count` (use 1 here) | `out_nocommit/captions.srt` with at least one cue |
-| `offside` | contrib | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
+| `video_captioning` | contrib | `gpu.Dockerfile` | `workers × gpu_count` (use 1 here) | `out_nocommit/captions.srt` with one cue per sampled frame |
+| `offside` | contrib | `gpu.Dockerfile` | one device per `gpu` stage **per camera** (4 with the 2-cam sample) | `out_nocommit_issia/results/verdicts.json` |
+
+All four contrib solutions now ship a **bundled sample input** on the
+`example_videos` release, so none of them needs footage of your own to run:
+`face_obfuscation` → `street_crossing.mp4`, `human_tracking` → `people_walking.mp4`,
+`video_captioning` → `tears_of_steel_clip.mp4`, `offside` → `offside_cam{0,1}.mp4`.
+Each is fetched by that solution's `prepare.py` into `work_dir` (never by
+`build_flow` — compiling stays side-effect free), which is why `work_dir` is
+mounted at the same absolute path in every pod.
 
 ## Deploy
 

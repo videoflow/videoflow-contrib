@@ -40,7 +40,7 @@ def build_flow(cfg=None):
     trk = cfg.tracker
     blur = cfg.blur
 
-    reader = VideofileReader(cfg.input_video, name='reader')
+    reader = VideofileReader(cfg.resolve_input(), name='reader')
     frame = FrameIndexSplitter(name='frame')(reader)
     faces = TensorflowObjectDetector(
         num_classes=int(det.get('num_classes', 1)),
@@ -58,7 +58,11 @@ def build_flow(cfg=None):
         kernel=int(blur.get('kernel', 23)),
         sigma=float(blur.get('sigma', 30)),
         name='obfuscator')(frame, faces, tracked_faces)
-    writer = VideofileWriter(cfg.output_path(), fps=cfg.fps, name='writer')(blurred_faces)
+    # swap_channels=False because the frames are already BGR: VideoFileReader
+    # defaults to swap_channels=False (unlike its VideostreamReader base), so
+    # leaving the writer's own default (True) on would swap them once, and the
+    # output video comes out with blue faces.
+    writer = VideofileWriter(cfg.output_path(), swap_channels=False, fps=cfg.fps, name='writer')(blurred_faces)
     return Flow([writer], flow_type=cfg.flow_type)
 
 

@@ -51,10 +51,20 @@ cd solutions/video_captioning
 videoflow deploy video_captioning.py --gpu-runtime-class nvidia
 ```
 
-That asks for the video path and a few knobs, writes `config.yaml`, builds and
-loads the image, pre-fetches the model weights, provisions a dev NATS+Redis, runs
-the flow to completion, and tears it all down. The subtitle files land in `out/`
-on this machine.
+That asks for a few knobs, writes `config.yaml`, builds and loads the image,
+downloads the sample clip and pre-fetches the model weights, provisions a dev
+NATS+Redis, runs the flow to completion, and tears it all down. The subtitle
+files land in `out/` on this machine.
+
+**Your own footage:** set `input_video` in `config.yaml` to an absolute path and
+add a mount so the pods can see it:
+
+```bash
+videoflow deploy video_captioning.py --gpu-runtime-class nvidia --mount /data/my_video.mp4:ro
+```
+
+Leaving `input_video` empty uses the bundled sample clip
+(`tears_of_steel_clip.mp4`), which `prepare.py` downloads into `work_dir`.
 
 `--gpu-runtime-class nvidia` is required on clusters where the NVIDIA runtime is
 opt-in (k3s among them): without it the pod schedules happily and starts
@@ -108,13 +118,24 @@ cd /path/to/videoflow && docker compose up -d nats redis   # NATS :4222, Redis :
 export VIDEOFLOW_BLOB_REDIS_URL=redis://localhost:6379/0   # frames >512KB use the blob store
 
 cd /path/to/videoflow-contrib/solutions/video_captioning
-cp config.example.yaml config.yaml     # then set input_video
-python prepare.py --config config.yaml # probe the video, warm the model cache
+cp config.example.yaml config.yaml     # optionally set input_video
+python prepare.py --config config.yaml # fetch + probe the video, warm the model cache
 python video_captioning.py --config config.yaml
 ```
 
 Start with `max_captions: 5` the first time: it bounds the run to a few minutes
 and still exercises every edge of the graph.
+
+## The sample clip
+
+`tears_of_steel_clip.mp4` is a 90-second, 1280×534 excerpt (from 4:10) of
+[*Tears of Steel*](https://mango.blender.org/), © copyright Blender Foundation |
+mango.blender.org, **CC BY 3.0**. It is live action shot in Amsterdam with heavy
+VFX, which is why it makes a good captioning demo: canal streets, interiors, a
+walking robot and several close-ups inside 90 seconds, so consecutive captions
+actually differ instead of restating one static scene. It is hosted as a release
+asset alongside the other solutions' samples:
+`https://github.com/videoflow/videoflow-contrib/releases/download/example_videos/tears_of_steel_clip.mp4`.
 
 ## Output
 
@@ -133,13 +154,70 @@ same `work_dir` — it is a log, not an artifact.
 Worker stdout carries one line per caption as it is generated, so
 `kubectl logs -l videoflow.io/run-id=<run>` shows progress too.
 
+## Verified run
+
+Run end to end on a local **k3s** cluster on 2026-07-28 from the bundled sample,
+on a node with a **single** RTX 4090:
+
+```bash
+cd /home/jadiel/workspace/videoflow-contrib
+docker build -f solutions/video_captioning/gpu.Dockerfile -t videoflow-video-captioning:r3 .
+
+cd solutions/video_captioning
+videoflow deploy video_captioning.py \
+    --no-build --image videoflow-video-captioning:r3 \
+    --config config.yaml --non-interactive \
+    --namespace videoflow \
+    --flow-id video-captioning --run-id video-captioning-d2 \
+    --gpu-runtime-class nvidia --keep-infra
+```
+
+Three config values differed from the shipped defaults, all forced by that one
+physical GPU — they are the same three anyone on a single-card box will need:
+
+| Key | Value | Why |
+|---|---|---|
+| `captioner.model_id` | `Qwen/Qwen2.5-VL-3B-Instruct` | the 7B default wants two whole cards in bf16 |
+| `captioner.gpu_count` | `1` | that node's 4 `nvidia.com/gpu` are time-slices of **one** card, and a sharded model needs whole exclusive devices |
+| `every_n_frames` | `48` | the sample is 24 fps, so this is one caption per 2 s |
+
+It ends with `Flow video-captioning completed.` and writes **45 cues** for 2160
+frames — sampled indices 1…2113 with no gaps, so nothing was evicted from the
+join.
+
+### Check the blob store before believing a short track
+
+The dev Redis `videoflow deploy` provisions is fixed at
+`--maxmemory 4gb --maxmemory-policy volatile-lru`. Every blob carries a TTL, so
+under pressure Redis drops the oldest rather than OOM-ing the node — which means
+a working set past 4 GB is **silently truncated**. The captioner logs
+`KeyError: Blob vf-blob-… not found (expired or never existed)` once per lost
+message and the run still finishes, just with a short subtitle track.
+
+Sampled frames are the whole working set here, and they are large: >512 KB goes
+to the blob store, so 1280×534 costs ~2 MB per hop. A first attempt lost 28 of
+its 45 captions this way while sharing Redis with two other flows. After a run
+whose `.srt` looks short:
+
+```bash
+kubectl exec -n videoflow deploy/redis -- redis-cli info stats | grep evicted_keys
+```
+
+Non-zero means the blob store, not the graph. Run one flow at a time, or apply
+your own `redis` Deployment+Service with a larger `maxmemory` before the first
+deploy — a pre-existing `redis` Service in the namespace is reused, not replaced.
+
+An empty `.srt` with a populated `.jsonl` is a different failure: the `subtitles`
+worker died before end-of-stream (the subtitle files are only written in
+`close()`). Check that pod, not the graph.
+
 ## Configuration reference
 
 `config.example.yaml` documents every key. The ones that decide what a run costs:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `input_video` | — | required; the video to caption |
+| `input_video` | `''` (sample) | the video to caption; empty uses the bundled `tears_of_steel_clip.mp4`, which `prepare.py` downloads into `work_dir` |
 | `every_n_frames` | 60 | caption one frame in N (60 ≈ one caption per 2s of 30fps footage) |
 | `max_captions` | -1 | stop after this many captions; -1 for the whole video |
 | `device` | `gpu` | `gpu` or `cpu` |
