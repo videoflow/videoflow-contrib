@@ -26,7 +26,7 @@ device: cpu
 flow_type: batch
 
 pose:
-  architecture: R50_FPN_3x     # Detectron2 keypoint model; R50_FPN_3x is the balanced default
+  architecture: R50_FPN_3x     # Detectron2 keypoint model; the one the component ships configs for
 
 encoder:
   batch_size: 32               # crops encoded per forward pass; lower it if VRAM is tight

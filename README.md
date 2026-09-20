@@ -11,6 +11,59 @@ libraries as necessaries.
 
 This contribution repository is both the proving ground for new functionality, and the archive for functionality that (while useful) may not fit well into the Videoflow paradigm.
 
+## Quick start
+
+Clone both repositories side by side, install videoflow from its checkout (it is
+not on PyPI yet), and run a solution — locally or on the cluster `kubectl`
+points at. Nothing else goes on your machine: the ML stacks live in the
+solution images, which both commands build for you.
+
+```bash
+git clone https://github.com/videoflow/videoflow
+git clone https://github.com/videoflow/videoflow-contrib
+uv tool install --editable './videoflow[all]'          # `videoflow` on your PATH
+#   or: python3 -m venv .venv && .venv/bin/pip install -e './videoflow[all]'
+
+cd videoflow-contrib/solutions/human_tracking
+videoflow run-local human_tracking.py        # local: the workers run in the solution image
+videoflow deploy human_tracking.py           # cluster: the same image, as pods
+```
+
+The first run asks a few questions (Enter takes the defaults: the bundled
+sample clip, CPU, batch) and writes `config.yaml`; the first build takes minutes
+(`videoflow-base`, then the solution image); prep runs inside the image and
+fetches the sample and the weights; the annotated video lands in `out/`. Docker
+must be running; for `deploy`, `kubectl` must point at your cluster. That is
+the whole story on a laptop cluster (kind, minikube, k3s, Docker Desktop).
+
+**A multi-node or shared cluster** needs a handful of per-cluster values — the
+registry the nodes pull from, an RWX claim and the directory it is served at,
+the namespace, a PriorityClass. They go in a cluster profile once, keyed by the
+kubectl context, and the commands above stay the same:
+
+```yaml
+# ~/.config/videoflow/clusters.yaml
+clusters:
+  lab:
+    context: default                         # kubectl config current-context
+    namespace: videoflow
+    registry: 10.0.0.1:5000
+    push_tool: crane                         # for a plain-HTTP registry the docker daemon does not trust
+    mount_pvc: ['vf-share:/shared/videoflow']
+    mount_home: /shared/videoflow/home
+    priority_class: cluster-batch
+```
+
+Answer the `work_dir` question with a directory under the shared claim. The
+full recipe, including how to find the claim's directory and how to verify a
+run, is in [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md); the
+mechanics are in the core README's *Deploying to Kubernetes* section.
+
+**GPU:** answer `gpu` when asked for the device. The GPU image is built instead,
+`deploy` requests GPUs for the pods and puts the cluster's `nvidia` RuntimeClass
+on them; `run-local` hands the workers their devices when the docker daemon has
+the NVIDIA runtime.
+
 ## Independent sub-packages
 Each folder in the repository corresponds to an individual sub-package that follows the [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages) Python 3 standard.  The project follows that structure to facilitate per subpackage independent licensing and installation.
 
@@ -66,21 +119,21 @@ sub-package. The checklist:
 
 ## Solutions
 
-End-to-end flows that wire components together. Each one deploys with a single
-command from its own directory:
+End-to-end flows that wire components together. Each one runs with a single
+command from its own directory, locally or on a cluster:
 
-| Solution | What it does | Deploy |
+| Solution | What it does | Run |
 |---|---|---|
-| [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow deploy face_obfuscation.py` |
-| [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow deploy human_tracking.py` |
-| [offside](solutions/offside) | Multi-camera FIFA-style semi-automated offside detection. | `videoflow deploy offside.py` |
+| [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow run-local face_obfuscation.py` / `videoflow deploy face_obfuscation.py` |
+| [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow run-local human_tracking.py` / `videoflow deploy human_tracking.py` |
 
-Each asks for its inputs the first time, writes a `config.yaml`, builds and loads
-its image, provisions a dev broker, runs, and tears down. See each solution's
-README for its configuration reference.
+Each asks for its inputs the first time (a bundled sample clip is the default),
+writes a `config.yaml`, builds its image, fetches its weights in the prep hook,
+provisions a dev broker, runs, and tears down. See each solution's README for
+its configuration reference.
 
-> **Looking for the toy solutions?** `toy_calculator`, `toy_fusion` and
-> `toy_router` moved to the core repo:
+> **Looking for the toy solutions?** `toy_calculator`, `toy_fusion`,
+> `toy_router` and `toy_recovery` live in the core repo:
 > [videoflow/solutions](https://github.com/videoflow/videoflow/tree/master/solutions),
 > where they also serve as its end-to-end test suite. They need no models, no
 > footage and no dependencies beyond the videoflow base image, and together they
@@ -92,7 +145,7 @@ README for its configuration reference.
 ## Writing a solution (a deployable graph)
 
 A *solution* is an end-to-end flow that wires components together — see the table
-above, with [solutions/offside](solutions/offside) as the fullest example. The
+above, with [solutions/human_tracking](solutions/human_tracking) as the fullest example. The
 smallest complete one is
 [toy_calculator](https://github.com/videoflow/videoflow/tree/master/solutions/toy_calculator)
 in the core repo; it is the place to start reading.
@@ -109,19 +162,21 @@ solutions/<name>/
 ├── gpu.Dockerfile         # GPU image;  ARG BASE_IMAGE=videoflow-base:py3.12-cuda
 ├── requirements[-gpu].txt # the solution's ML stack
 ├── config.example.yaml    # fully documented config (for humans)
-├── config.template.yaml   # config template + x-questions/x-mounts (for deploy)
-└── prepare.py             # idempotent one-shot prep hook (run before compile)
+├── config.template.yaml   # config template + x-questions/x-mounts/x-gpu (for deploy and run-local)
+└── prepare.py             # idempotent one-shot prep hook (run in the image, before compile)
 ```
 
 **The graph module.** Expose a factory `build_flow(cfg=None) -> Flow` that
 builds the graph *without* running it. When called with no argument (which is
-what `videoflow deploy` does) it must load its own config — resolve the path
-relative to the module file, not the cwd:
+what `videoflow deploy` and `run-local` do) it must load its own config: the
+one they resolved, exported as `VF_SOLUTION_CONFIG`, else the `config.yaml`
+next to the module — never a path relative to the cwd:
 
 ```python
 def build_flow(cfg=None):
     if cfg is None:
-        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
+        here = os.path.dirname(os.path.abspath(__file__))
+        cfg = load_config(os.environ.get('VF_SOLUTION_CONFIG') or os.path.join(here, 'config.yaml'))
     ...
     return Flow(sinks, flow_type=cfg.flow_type)
 ```
@@ -134,8 +189,8 @@ class path, and the graph module itself is not importable inside workers.
 path that is valid *both* on the machine you deploy from *and* inside the pods
 — deploy hostPath-mounts each one at the same location. The simplest way to
 guarantee this: resolve every relative config path against the config file's
-directory (see `solutions/offside/common.py`), and list the path-bearing config
-keys in `x-mounts` (below).
+directory (see `solutions/human_tracking/common.py`), and list the path-bearing
+config keys in `x-mounts` (below).
 
 Two rules follow from *when* each path is resolved, and getting them wrong
 produces a flow that compiles fine and then fails in the pod:
@@ -159,15 +214,17 @@ produces a flow that compiles fine and then fails in the pod:
 
 **Dockerfiles.** Solution images are built from the **repo root** (they COPY
 the sibling component sub-packages), which is exactly what `videoflow deploy`
-does: it uses the git root enclosing the graph as the build context, picks
-`gpu.Dockerfile` when the local docker daemon has the NVIDIA runtime, and
-auto-builds the `videoflow-base` image first when it's missing. Declare the
+and `run-local` do: they use the git root enclosing the graph as the build
+context, pick `gpu.Dockerfile` when the config values named in the template's
+`x-gpu` say `gpu` (never because of the docker daemon on your machine), and
+auto-build the `videoflow-base` image first when it's missing. Declare the
 base as `ARG BASE_IMAGE=videoflow-base:py3.12[-cuda]` so deploy can find it.
 Install the ML stack first, then the component sub-packages with `--no-deps`
 (videoflow is in the base and the stack is already resolved), then COPY the
-solution modules.
+solution modules. The built image is deployed under a content-addressed tag and
+pushed to the cluster profile's registry, so you never tag or push by hand.
 
-**`config.template.yaml`.** A valid config body plus two blocks that deploy
+**`config.template.yaml`.** A valid config body plus three blocks that deploy
 strips from the generated `config.yaml`:
 
 - `x-questions` — what deploy asks interactively when no config exists. Each
@@ -177,29 +234,35 @@ strips from the generated `config.yaml`:
   validates each exists, and expands them into a mapping using `item_key`
   (e.g. `'cam{i}'`) and `item_value` (e.g. `{video: '{path}'}`).
 - `x-mounts` — path templates resolved against the final config, each becoming
-  a hostPath mount on the prep/compile containers and every worker pod:
-  `'{cameras.*.video}:ro'` (dotted lookup, `*` fans out, read-only),
+  a mount on the prep/compile containers and every worker (a bind mount
+  locally, a hostPath or claim volume in the cluster): `'{input_video}:ro'`
+  (dotted lookup, `*` fans out, read-only; an empty value mounts nothing),
   `'{work_dir}'` (same path on host and container), and
   `'~/.videoflow:/root/.videoflow'` (host:container pair — maps the operator's
-  weight cache onto the container root's).
+  weight cache onto the container root's; `--mount-home` re-roots the `~`).
+- `x-gpu` — the config values that decide whether `gpu.Dockerfile` is built:
+  `['{device}']`, or `['{device.*}']` for per-stage placement.
 
-**`prepare.py`.** A hook deploy runs *inside the solution image* before
-compiling (its outputs get baked into the compiled node params). Contract:
+**`prepare.py`.** A hook deploy and run-local run *inside the solution image*
+before compiling (its outputs get baked into the compiled node params). Contract:
 accepts `--config PATH`; is **idempotent** — check each step's output and skip
-it (print why) unless `--force`; exits non-zero with the exact manual command
-to run when a step needs human interaction (e.g. click-UI calibration), so the
-user can do it once and re-run deploy.
+it (print why) unless `--force`; fetches every model's weights with the same
+`get_file` key and URL the component uses, so no worker downloads anything;
+exits non-zero with the exact manual command to run when a step needs human
+interaction, so the user can do it once and re-run.
 
 With all of the above in place, running a solution is:
 
 ```bash
 cd solutions/<name>
-videoflow deploy <name>.py
+videoflow run-local <name>.py     # locally, the workers in the solution image
+videoflow deploy <name>.py        # on the cluster
 ```
 
 and every automated step still has a manual override (`--config`, `--image`,
 `--nats`, `--mount`, `--no-prepare`, `--no-build`, ...). See the
-[videoflow deployment guide](../videoflow/docs/source/distributed/deploying-to-kubernetes.rst)
+[videoflow deployment guide](https://videoflow.github.io/videoflow/distributed/deploying-to-kubernetes.html)
+(source: `../videoflow/docs/source/distributed/deploying-to-kubernetes.rst`)
 for the full pipeline.
 
 ## Example Usage
@@ -247,7 +310,8 @@ def build_flow():
     return Flow([writer], flow_type = BATCH)
 
 if __name__ == "__main__":
-    # Local run (needs a NATS server): one subprocess per node, talking to NATS.
+    # Direct run against a broker you started (docker compose up -d in the core
+    # repo); `videoflow run-local my_flow.py` starts one for you instead.
     from videoflow.engines.local import LocalProcessEngine
     flow = build_flow()
     flow.run(LocalProcessEngine())

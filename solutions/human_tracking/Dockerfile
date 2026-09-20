@@ -12,8 +12,9 @@
 # A GPU build is available: docker build -f solutions/human_tracking/gpu.Dockerfile -t videoflow-contrib-human-tracking:gpu .
 #
 # Normally you don't build this by hand — `videoflow deploy human_tracking.py`
-# builds it (picking gpu.Dockerfile when a GPU is available), loads it into the
-# cluster, and runs the flow. See solutions/human_tracking/README.md.
+# (and `videoflow run-local`) build it, picking gpu.Dockerfile instead when the
+# config's `device` is gpu (the template's x-gpu), and run the flow with it. See
+# solutions/human_tracking/README.md.
 ARG BASE_IMAGE=videoflow-base:py3.12
 FROM ${BASE_IMAGE}
 
@@ -32,12 +33,6 @@ RUN uv pip install --system --no-cache \
 # 2. tensorflow (humanencoder) + scipy (deepsort).
 COPY solutions/human_tracking/requirements.txt ./
 RUN uv pip install --system --no-cache -r requirements.txt
-
-# tensorflow pins protobuf<5, which silently downgrades the base image's protobuf
-# below the >=5.27 the generated videoflow.v1 wire modules require (runtime_version)
-# — every worker in the image then dies at import. Restore the core floor;
-# tensorflow runs fine against the newer runtime.
-RUN uv pip install --system --no-cache 'protobuf>=5.27'
 
 # 3. Build detectron2 from source against the installed torch. Its setup.py
 #    imports torch, so build isolation must be off (and the build backend's own
@@ -59,5 +54,13 @@ COPY solutions/human_tracking/human_tracking.py \
      solutions/human_tracking/human_tracking_nodes.py \
      solutions/human_tracking/common.py \
      solutions/human_tracking/prepare.py ./
+
+# 6. Restore the floors the ML stack disturbed, last of all: tensorflow < 2.18
+#    needs numpy 1 (the detectron2 install above pulls numpy 2 back in, and a
+#    numpy-2 interpreter fails to import tensorflow's compiled modules), and
+#    both tensorflow (which pins protobuf<5) and the generated videoflow.v1
+#    wire modules (which need >=5.27) are served by the protobuf 5.x line —
+#    protobuf 6 removed MessageFactory.GetPrototype, which tensorflow still calls.
+RUN uv pip install --system --no-cache 'numpy<2' 'protobuf>=5.27,<6'
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from videoflow-base.

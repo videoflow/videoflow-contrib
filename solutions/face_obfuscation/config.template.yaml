@@ -1,9 +1,10 @@
-# Face-obfuscation config template. `videoflow deploy face_obfuscation.py` reads
-# this when no config.yaml exists: it asks the x-questions below, writes
-# config.yaml, and hostPath-mounts the x-mounts paths into the prep container and
-# the worker pods. See config.example.yaml for what every knob means.
+# Face-obfuscation config template. `videoflow deploy face_obfuscation.py` and
+# `videoflow run-local face_obfuscation.py` read this when no config.yaml exists:
+# they ask the x-questions below, write config.yaml, and mount the x-mounts paths
+# into the prep container and the worker containers or pods. See
+# config.example.yaml for what every knob means.
 work_dir: ./out
-input_video: null
+input_video: ''
 output_video: blurred_video.avi
 fps: 30
 device: cpu
@@ -21,11 +22,16 @@ blur:
   kernel: 23
   sigma: 30
 
-# Inputs `videoflow deploy` asks for when generating config.yaml.
+# Inputs asked for when generating config.yaml.
 x-questions:
+  - key: work_dir
+    prompt: 'Directory for the output (on a multi-node cluster: one every node sees, under the shared claim)'
+    type: str
+    default: ./out
   - key: input_video
-    prompt: 'Path to the video whose faces should be blurred'
-    type: path
+    prompt: 'Path to the video whose faces should be blurred (empty = a bundled sample clip)'
+    type: str
+    default: ''
   - key: detector.min_score_threshold
     prompt: 'Face detection threshold (lower catches more faces and more false positives)'
     type: float
@@ -45,10 +51,15 @@ x-questions:
     choices: [batch, realtime]
     default: batch
 
-# Paths that must be visible inside prep containers and worker pods: the input
-# video (read-only) and the work dir at the same absolute location, plus the
-# operator's model-weight cache mapped onto the container root's.
+# Paths that must be visible inside the prep container and the workers: the input
+# video (read-only; nothing when the bundled sample is used, it lives in work_dir)
+# and the work dir at the same absolute location, plus the operator's model-weight
+# cache mapped onto the container root's.
 x-mounts:
   - '{input_video}:ro'
   - '{work_dir}'
   - '~/.videoflow:/root/.videoflow'
+
+# The config value that decides whether the GPU image (gpu.Dockerfile) is built.
+x-gpu:
+  - '{device}'

@@ -252,8 +252,10 @@ solutions/<name>/
 ```python
 def build_flow(cfg=None):
     if cfg is None:
-        # Module-dir-relative: deploy compiles from an arbitrary cwd.
-        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
+        # The config deploy/run-local resolved (VF_SOLUTION_CONFIG), else the
+        # sibling config.yaml: deploy compiles from an arbitrary cwd.
+        here = os.path.dirname(os.path.abspath(__file__))
+        cfg = load_config(os.environ.get('VF_SOLUTION_CONFIG') or os.path.join(here, 'config.yaml'))
     from videoflow_contrib.foo import FooNode        # heavy imports stay inside
     reader = VideofileReader(cfg.input_video, name='reader')
     ...
@@ -310,8 +312,12 @@ A valid config body plus two blocks stripped on write:
   `path` (one validated absolute path), `paths` (comma-separated, expanded into a
   mapping via `item_key` like `'cam{i}'` and `item_value` like `{video: '{path}'}`).
 - `x-mounts` — path templates resolved against the final config, each becoming a
-  hostPath mount: `'{cameras.*.video}:ro'` (dotted lookup, `*` fans out),
-  `'{work_dir}'`, `'~/.videoflow:/root/.videoflow'`.
+  mount (bind locally, hostPath or claim in the cluster): `'{input_video}:ro'`
+  (dotted lookup, `*` fans out; an empty value mounts nothing), `'{work_dir}'`,
+  `'~/.videoflow:/root/.videoflow'`.
+- `x-gpu` — the config values that select the GPU image: `['{device}']`, or
+  `['{device.*}']` for per-stage placement. Deploy never reads the docker daemon
+  for this.
 
 ### `prepare.py`
 
@@ -320,11 +326,12 @@ into the compiled specs. Contract: takes `--config PATH`; is idempotent (check e
 output, skip it with a printed reason, `--force` to redo); exits non-zero with the
 exact manual command when a step needs a human (e.g. a click-UI calibration).
 
-The individual prep steps raise from the taxonomy and their `main()` renders it — see
-`solutions/offside/calibrate.py`: `except VideoflowError` prints `code: message` plus the remedy
-and returns `e.exit_code`, so `prepare.py` and CI can tell "your config is wrong" (2) from "the
-footage is unreadable" (3). `prepare.py`'s own `SystemExit` with the manual command stays as is;
-that message *is* the remedy.
+The individual prep steps raise from the taxonomy and their `main()` renders it: `except
+VideoflowError` prints `code: message` plus the remedy and returns `e.exit_code`, so `prepare.py`
+and CI can tell "your config is wrong" (2) from "the footage is unreadable" (3). `prepare.py`'s
+own `SystemExit` with the manual command stays as is; that message *is* the remedy. Pre-fetch
+every model's weights with the **same** `get_file` key and URL the component's `open()` uses
+(`solutions/human_tracking/prepare.py` is the reference), so a worker never downloads.
 
 ### Solution Dockerfile
 
@@ -335,7 +342,7 @@ the stack is already resolved), then COPY the solution modules — graph, nodes,
 
 ## Working method
 
-1. **Read a reference before writing.** `solutions/offside/` is the fullest solution;
+1. **Read a reference before writing.** `solutions/human_tracking/` is the fullest solution;
    `../videoflow/solutions/toy_calculator/` (core repo) the smallest complete one, with
    `toy_fusion` the REALTIME one; `offside_engine/` the cleanest component. Match the
    surrounding style.

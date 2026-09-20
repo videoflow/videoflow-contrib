@@ -1,452 +1,173 @@
 # Deploying and verifying the solutions
 
-How to take the solutions in `solutions/` and prove they actually run as distributed flows on a
-Kubernetes cluster. This is the command-level companion to
+How to take the solutions in `solutions/` and prove they actually run as distributed flows —
+locally, and on a Kubernetes cluster. This is the command-level companion to
 [`../agents/solution-verifier.md`](../agents/solution-verifier.md), which holds the judgement —
 what to try first, how to tell the failure layers apart, and when to stop.
 
 > Keep this file in sync with the deploy CLI in
 > [`../../../videoflow/videoflow/deploy/cli.py`](../../../videoflow/videoflow/deploy/cli.py) and
-> with each solution's `config.template.yaml` and `README.md`. The cluster facts below describe a
-> specific machine and will drift — re-run the probes rather than trusting them.
+> with each solution's `config.template.yaml` and `README.md`. Nothing here describes one
+> machine: every cluster fact is a probe you run, and every per-cluster value lives in the
+> cluster profile file.
 
-## Preconditions — run these before building anything
+## Preconditions — probes, not assumptions
 
-Each is seconds. An image build is tens of minutes. **The expensive mistake in this job is
-discovering an infrastructure blocker after a CUDA build**, so rule them out first.
-
-```bash
-kubectl config current-context                       # expect: k3s
-kubectl get nodes -o wide
-kubectl get runtimeclass nvidia                      # the opt-in GPU runtime
-kubectl get nodes -l videoflow.io/gpu-pool=true -o name
-kubectl get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}'   # expect 4
-
-sudo -n -l k3s ctr images import -                   # THE GATING PROBE — see below
-df -h /                                              # images land twice: docker + containerd
-docker system df
-
-mkdir -p ~/.videoflow/models ~/.torch ~/.cache       # else root-owned containers create them
-```
-
-### The gating probe: can an image reach containerd?
-
-`videoflow deploy` loads a locally-built image into k3s with
-`docker save <img> | sudo k3s ctr images import -`
-([`cluster.py`](../../../videoflow/videoflow/deploy/cluster.py)). That needs **passwordless
-sudo for that exact command**. This machine's sudoers now whitelists it and nothing else, so
-probe the command itself, not sudo in general:
-
-```
-$ sudo -n -l k3s ctr images import -
-/usr/local/bin/k3s ctr images import -        # allowed → image loading works
-$ sudo -n true
-sudo: a password is required                  # FALSE NEGATIVE here — do not gate on this
-```
-
-If the `-l` probe fails too, image loading is blocked and no code change in either repo fixes
-it — an agent has no TTY to answer the prompt. The realistic unblocks are operator actions: the
-sudoers `NOPASSWD` entry above, group ownership on the containerd socket, or a registry the node
-can pull from (none is running, and `/etc/rancher/k3s/registries.yaml` needs root).
-
-When this is the situation, **still run the whole offline half of the pipeline before reporting** —
-everything through the `--dry-run` render below works without a cluster and proves far more than
-"sudo failed".
-
-### Cluster facts
-
-| | |
-|---|---|
-| Context | `k3s` (current). A `kind-cluster` context also exists and is dead — ignore it. |
-| Node | `jadiel-deep-learning`, single RTX 4090, already labeled `videoflow.io/gpu-pool=true` |
-| GPU | `nvidia.com/gpu: 4` — **time-sliced from one physical card**, so no memory isolation |
-| RuntimeClass | `nvidia` exists but is **opt-in**; runc stays the containerd default |
-
-**`--gpu-runtime-class nvidia` is mandatory for any deploy with a GPU node.** Without it the pod
-schedules happily and starts device-less, then fails deep inside model loading. It is the easiest
-mistake to make here and it does not look like a flag problem.
-
-Registered GPU modes are exactly `exclusive` (default) and `shared`; confirm with
-`python -c "from videoflow.deploy.gpu import registered_gpu_modes; print(registered_gpu_modes())"`.
-`shared` drops the resource limit, so with three detectors on one physical card it removes the only
-thing stopping them piling onto one device. Prefer `exclusive` while demand ≤ 4.
-
-## Bootstrap
-
-The core CLI is already installed and the deploy extras are present (`nats-py`, `redis`, `yaml`,
-`numpy`, `opencv`). `kubernetes` is absent and that is fine — the repo shells out to `kubectl` and
-has no Python Kubernetes client. What is missing is any `videoflow-base` image: the daemon has
-plenty of unrelated images, but none of ours.
+Each is seconds. An image build is minutes. Run them before building anything.
 
 ```bash
-cd /home/jadiel/workspace/videoflow
-docker image inspect videoflow-base:py3.12-cuda >/dev/null 2>&1 || ./docker/build-images.sh
+videoflow --help                                     # the CLI, installed from the sibling checkout
+python -c "import videoflow, os; print(os.path.dirname(os.path.dirname(videoflow.__file__)))"
+                                                     # ... and from SOURCE: that is the checkout the
+                                                     #     base image is built from
+docker info --format '{{json .Runtimes}}' | grep -q nvidia && echo "nvidia runtime" || echo "no nvidia runtime (GPU workers run device-less locally)"
+
+kubectl config current-context                       # the cluster you mean — deploy never switches it
+kubectl get nodes -o wide                            # one node: side-loading works; several: you need a registry
+python -c "from videoflow.deploy.cluster import detect_cluster; print(detect_cluster())"
+kubectl get runtimeclass                             # an `nvidia` class is applied to GPU pods automatically
+kubectl get storageclass                             # an RWX class, for a multi-node work claim
+kubectl get nodes -l videoflow.io/gpu-pool=true      # only for GPU flows
 ```
 
-Then build each solution image **explicitly**, with the right Dockerfile and an immutable tag,
-from the contrib repo root (solution Dockerfiles COPY sibling sub-packages):
+For a multi-node cluster, two more:
 
 ```bash
-cd /home/jadiel/workspace/videoflow-contrib
-docker build -f solutions/offside/gpu.Dockerfile      -t videoflow-offside:r1          .
-docker build -f solutions/human_tracking/Dockerfile   -t videoflow-human-tracking:r1   .
-docker build -f solutions/face_obfuscation/Dockerfile -t videoflow-face-obfuscation:r1 .
-
-# Smoke-test CUDA in the GPU image now, not inside a worker pod 40 minutes later.
-docker run --rm --gpus all videoflow-offside:r1 \
-    python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+curl -sf "http://<registry>/v2/_catalog"             # the registry the nodes pull from answers
+kubectl run vf-egress --rm -i --restart=Never --image=videoflow-base:py3.12 --command -- \
+    python -c "import urllib.request; print(urllib.request.urlopen('https://github.com', timeout=8).status)"
+                                                     # can pods reach the internet? if not, the prepare
+                                                     # hook's caches (mount_home) are all the pods get
 ```
 
-The `toy_*` solutions live in the **core** repo now, and build from *its* root:
+## The cluster profile
 
-```bash
-cd /home/jadiel/workspace/videoflow
-docker build -f solutions/toy_calculator/Dockerfile   -t videoflow-toy-calculator:r1   .
-docker build -f solutions/toy_fusion/Dockerfile       -t videoflow-toy-fusion:r1       .
-docker build -f solutions/toy_router/Dockerfile       -t videoflow-toy-router:r1       .
-```
-
-Those three images copy a handful of pure-stdlib files onto `videoflow-base:py3.12` and build in
-seconds; they only need the CPU base image (none ships a `gpu.Dockerfile`).
-
-**Never let `videoflow deploy` autobuild** — always `--no-build --image <ref>`:
-
-- `autobuild` picks `gpu.Dockerfile` whenever the *docker daemon* exposes an nvidia runtime
-  (`docker_gpus_available()` is `True` here), regardless of the flow's device placement. Left
-  alone it builds a CUDA image for the two CPU-only solutions.
-- `autobuild` tags `:latest`, and **core sets no `imagePullPolicy` anywhere**. Kubernetes defaults
-  `:latest` to `Always`, so a locally-imported image is re-pulled from a registry that hasn't got
-  it. It surfaces as `provision Job did not complete within 180s`, because the provision Job runs
-  on the same image in phase 1 of the two-phase apply.
-
-**Tags are immutable and increment on every rebuild** (`:r1`, `:r2`, …). A non-`:latest` tag gets
-`IfNotPresent` — which is what makes a locally-loaded image usable at all, and exactly why reusing
-a tag after a fix silently runs the **stale** image.
-
-Do **not** install `videoflow_contrib` into the core venv. The components have mutually
-incompatible dependencies (tensorflow vs torch) and the repo is deliberate about this. The
-consequence is that `run-local` and `videoflow explain` are both unusable **for the three ML
-solutions** — they compile on the host. `--dry-run` replaces them and is strictly better (see
-below).
-
-The `toy_*` solutions are the exception: they import no contrib packages, so they compile and
-**run** on the host with nothing but the core CLI — from the core checkout:
-
-```bash
-cd /home/jadiel/workspace/videoflow/solutions/toy_calculator
-videoflow run-local toy_calculator.py     # reuses a listening NATS
-
-# or all three at once, with their assertions already written:
-cd /home/jadiel/workspace/videoflow && uv run pytest tests/integration/test_toy_solutions.py
-```
-
-That is the cheapest end-to-end proof of the whole framework path (config, prep, compile,
-broker, workers, artifacts) — it needs no image and no cluster, so it works even when image
-loading into k3s is blocked. Run it before building anything.
-
-Record what you are testing; it belongs at the top of any report:
-
-```bash
-git -C /home/jadiel/workspace/videoflow         log -1 --format='core    %h %s'
-git -C /home/jadiel/workspace/videoflow-contrib log -1 --format='contrib %h %s'
-```
-
-## Offline validation — do this before every cluster deploy
-
-```bash
-cd /home/jadiel/workspace/videoflow-contrib/solutions/offside
-videoflow deploy offside.py \
-    --dry-run --no-build --image videoflow-offside:r1 \
-    --config config.yaml --non-interactive \
-    --namespace videoflow --gpu-runtime-class nvidia \
-    > /tmp/offside-render.yaml
-```
-
-This is the highest value-per-second step in the whole loop. With `--image` set, the host compile
-fails on `ModuleNotFoundError` (an `ImportError`) and deploy falls back to compiling **inside the
-solution image**, with the graph dir mounted at the same absolute path. So a clean dry run has
-already proven: the config parses, prep artifacts resolve, contrib imports, every node's
-`get_params()` contract holds, the graph compiles, and the manifests render — with no cluster.
-
-Then assert on the rendered YAML:
-
-```bash
-grep -c 'runtimeClassName: nvidia' /tmp/offside-render.yaml   # offside: expect 3 detectors
-grep -A2 'nvidia.com/gpu' /tmp/offside-render.yaml            # expect 3 x limit 1
-```
-
-and check that **every path-valued entry of each node's `VF_NODE_PARAMS_JSON` falls under one of
-that workload's `volumeMounts`**. A path that doesn't is a `FileNotFoundError` in a pod later, and
-this is the cheapest place to catch it.
-
-Leave `--no-prepare` **off** on the first pass so the prep hook runs in-image and materialises
-weights and sample clips; add it on every later iteration.
-
-## Where the config must live
-
-**`--config` never reaches `build_flow`.** `load_flow` calls `factory()` with no arguments, and
-each solution's `build_flow(cfg=None)` then reads `os.path.dirname(__file__)/config.yaml`
-directly. `--config` only feeds `x-mount` resolution and `prepare.py --config`.
-
-So the config **must** be written to `<solution>/config.yaml`. Put it anywhere else and compile
-reads a different file — and a missing one raises `FileNotFoundError`, which the compile path does
-*not* catch (it only catches `ImportError`), so you get a raw traceback instead of the in-image
-fallback. Pass `--config config.yaml` as well, for the mount resolution.
-
-`solutions/*/config.yaml` is gitignored — it is generated per machine and full of absolute paths.
-
-## Per-solution recipes
-
-Use `work_dir: ./out_nocommit` throughout: `*_nocommit*` is gitignored, so artifacts and
-root-owned container output stay out of `git status`.
-
-Order: **toys first** (seconds per iteration, no weights, no network, and they run-local on the
-host before any image exists), then the CPU ML solutions, then `offside`.
-
-The three toy recipes below are for solutions in the **core** repo — run them from
-`/home/jadiel/workspace/videoflow/solutions/<name>/`, not from this one.
-
-### `toy_calculator` — start here
-
-The smallest solution: a BATCH diamond over integers (fan-out, competing replicas on `square`,
-a trace join, a stateful aggregator, four sinks including a `metadata=True` consumer). Pure
-stdlib on `videoflow-base:py3.12`; zero network. The artifact is **self-checking**: `prepare.py`
-bakes `expected.json`, and the report consumer records whether the run reproduced it.
+A single-node laptop cluster (kind, minikube, k3s, Docker Desktop) needs no profile. Anything
+else gets one entry in `~/.config/videoflow/clusters.yaml`, keyed by the kubectl context it
+describes; `deploy` and `teardown` take their defaults from it (an explicit flag still wins), and
+say so. Example for a four-node k3s cluster with a plain-HTTP registry on the control plane, an
+NFS-backed RWX StorageClass and a shared PriorityClass:
 
 ```yaml
-# <core repo>/solutions/toy_calculator/config.yaml
-work_dir: ./out_nocommit
-start_value: 1
-end_value: 200
-producer_fps: 50
-delay_fps: 40
-flow_type: batch
-square: {workers: 2}
-join: {timeout_s: null, missing: wait, max_pending: 100000}
+docker:                                   # machine-level, every docker build / run (optional)
+  build_args: ''
+clusters:
+  lab:
+    context: default                      # kubectl config current-context
+    namespace: videoflow
+    registry: 10.0.0.1:5000               # push with crane: the docker daemon does not trust plain HTTP
+    push_tool: crane
+    mount_pvc: ['vf-share:/opt/data/cluster-share/pvc-<id>']   # the claim, at its backing directory
+    mount_home: /opt/data/cluster-share/pvc-<id>/home           # the caches, inside the claim
+    priority_class: cluster-batch
+    # gpu_nodes: [gpu-01]                 # only the GPU nodes that are yours
+    broker_profile: durable               # the nodes' root disks are ~8 GB: a video-sized Redis
+    broker_storage_class: nfs-shared      # append-only file on an emptyDir gets the pod evicted,
+    broker_replicas: 1                    # so broker and store live on claims of the RWX class
 ```
 
-Success artifact: `out_nocommit/report.json`, fresh mtime, and — stronger than any mtime —
+The claim: create an RWX PersistentVolumeClaim in the namespace (see `k8s/test-pvc.yaml` in the
+core repo for the shape) and find the directory it is served at on your machine — for the NFS
+CSI driver, `<share>/<subdir>` from the bound PersistentVolume:
 
 ```bash
-python3 -c "import json; r=json.load(open('out_nocommit/report.json')); print(r); assert r['matches_expected'] is True"
+kubectl create namespace videoflow
+kubectl apply -n videoflow -f - <<'EOF'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: vf-share, labels: {app.kubernetes.io/managed-by: videoflow}}
+spec: {accessModes: [ReadWriteMany], storageClassName: nfs-shared, resources: {requests: {storage: 50Gi}}}
+EOF
+pv=$(kubectl get pvc -n videoflow vf-share -o jsonpath='{.spec.volumeName}')
+kubectl get pv "$pv" -o jsonpath='{.spec.csi.volumeAttributes.share}/{.spec.csi.volumeAttributes.subdir}{"\n"}'
 ```
 
-`matches_expected: false` with a short `pairs_seen` means messages were dropped somewhere —
-that is a framework/broker finding, not a toy quirk.
+That directory must be readable and writable on your machine (mount the export, or run on the
+host that serves it). Everything the solution reads or writes goes under it: answer the
+`work_dir` question with `<dir>/<solution>/out`, point your own input videos there, and let
+`mount_home` put the model caches there — the prepare container on your machine fills them, the
+pods mount them from the claim.
 
-### `toy_router`
+## The solutions
 
-Partitioned parallelism: an `async def process` enricher stamps each event's sensor id as the
-partition key, a stateful counter runs 3 partitioned replicas (an **Indexed Job** on
-Kubernetes), and the ledger consumer is `idempotent=True` (exercises the Redis idempotency
-store). Also self-checking: `prepare.py` walks the producer's PRNG and bakes
-`expected_counts.json`.
-
-```yaml
-# <core repo>/solutions/toy_router/config.yaml
-work_dir: ./out_nocommit
-seed: 7
-events: 300
-sensors: 6
-rate_fps: 100
-idempotent_sink: true
-enrich: {threshold: 50.0, lookup_ms: 1.0}
-counter: {partitions: 3, partition_by: _partition_key}
-```
-
-Success artifact: `out_nocommit/counts.json`, fresh mtime, and
-
-```bash
-python3 -c "import json; c=json.load(open('out_nocommit/counts.json')); print(c); assert c['matches_expected'] is True and c['sticky'] is True"
-```
-
-With `partition_by: trace_id` the totals must still match but `sticky` goes `false` (keys
-spread across replicas) — drop that half of the assertion.
-
-### `toy_fusion` — the REALTIME one
-
-Two simulated cameras plus a 100 Hz IMU, fused by a **time-mode join** (tolerance 15ms, 0.25s
-lateness timeout, quorum, a 40ms collect window). Producers are unbounded when
-`duration_s: 0` — the flow runs until teardown, which is the REALTIME contract deploy holds you
-to: `deploy` returns after the ~30s schedulability check and success must be **observed**.
-
-```yaml
-# <core repo>/solutions/toy_fusion/config.yaml
-work_dir: ./out_nocommit
-cameras: 2
-camera_fps: 10
-phase_step_ms: 3.0
-sensor_hz: 100
-duration_s: 0            # cluster: run forever; run-local smoke: set 15
-flow_type: realtime
-fusion: {tolerance_ms: 15, timeout_s: 0.25, quorum: 1, sensor_window_ms: 40}
-```
-
-Verifying the cluster run (`duration_s: 0`):
-
-```bash
-# latest.json is atomically rewritten on every fused moment — watch it advance.
-cd /home/jadiel/workspace/videoflow
-stat -c '%y %n' solutions/toy_fusion/out_nocommit/latest.json   # run twice, a few seconds apart
-python3 -c "import json; m=json.load(open('solutions/toy_fusion/out_nocommit/latest.json')); print(m); assert m['views'] == m['expected_views'] and m['sensor_samples'] > 0"
-```
-
-then `videoflow teardown` ends the run. A bounded run (`duration_s > 0` — right for
-`run-local`) drains on its own and writes `fusion_summary.json`; assert
-`complete_moments > 0`. The producers align their tick grids to whole epoch seconds precisely
-so that independently-started workers can pair up; during startup skew the early camera's
-moments emit at quorum (`views < expected_views`), which is correct behaviour, not a failure.
-**`complete_moments: 0` for a whole run** means the timelines never met: check
-`fusion.tolerance_ms` against `phase_step_ms * (cameras - 1)` before suspecting the framework.
-
-### `face_obfuscation` — the cheapest ML solution
-
-The cheapest target: CPU only, one input, no prep beyond a weights fetch. The best first proof
-that the framework path works end to end. Build with the **CPU** `Dockerfile`; GPU demand 0.
-
-`load_config` raises `ConfigError` (`VF_CONFIG`, exit 2) if `input_video` is unset — there is no
-bundled default — and `output_video` **must end in `.avi`** (`VideofileWriter` supports nothing
-else). Both print the fix under the message rather than a traceback.
-
-```yaml
-# solutions/face_obfuscation/config.yaml
-work_dir: ./out_nocommit
-input_video: /home/jadiel/workspace/videoflow-contrib/solutions/offside/data_nocommit/cam0.mp4
-output_video: blurred_video.avi
-fps: 30
-device: cpu
-flow_type: batch
-detector: {architecture: ssd-mobilenetv2, dataset: faces, num_classes: 1, min_score_threshold: 0.2}
-tracker: {max_age: 12, min_hits: 0}
-blur: {expand: 0.20, kernel: 23, sigma: 30}
-```
-
-The offside clips are soccer wide shots, so the detector will find few or no faces — that still
-exercises the whole pipeline and still writes the output. For a semantically meaningful run, use
-human_tracking's `people_walking.mp4` sample instead, once its prep hook has downloaded it.
-
-Success artifact: `out_nocommit/blurred_video.avi`, non-empty, fresh mtime.
-
-### `human_tracking`
-
-Needs **no external footage** — an empty `input_video` makes `prepare.py` download the
-`people_walking.mp4` sample into `work_dir` (deliberately there rather than the model cache,
-because that path is baked into the reader's params and `work_dir` is the same-path mount). It
-does need network for that sample plus the encoder weights; detectron2 pose weights are fetched by
-the model zoo on first use **inside the worker**, which is an unwarmed runtime dependency and a
-plausible blocker. Build with the **CPU** `Dockerfile`; GPU demand 0.
-
-```yaml
-# solutions/human_tracking/config.yaml
-work_dir: ./out_nocommit
-input_video: ''
-output_video: annotated_video.avi
-device: cpu
-flow_type: batch
-pose: {architecture: R50_FPN_3x}
-encoder: {batch_size: 32}
-tracker: {min_height: 0, max_cosine_distance: 0.2, nn_budget: null}
-```
-
-Success artifact: `out_nocommit/annotated_video.avi`, non-empty, fresh mtime.
-
-### `offside` — the GPU one, and the most likely to fail
-
-Three cameras, a multi-parent join, and the only GPU demand: **3** — one detector per camera, with
-tracker and pose on CPU — against the cluster's 4, so `exclusive` works. Build with
-`gpu.Dockerfile`.
-
-**`work_dir` must be `./out_nocommit`.** `prepare.py` runs `weights → sync_offsets → calibrate →
-fit_teams`, skipping any step whose output already exists, and **hard-exits telling you to run a
-manual click-UI on a machine with a display** if automatic calibration fails. `out_nocommit/`
-already holds `calib/cam{0,1,2}.json`, `teams.json` and `offsets.json`, so pointing `work_dir`
-there skips all three. It is load-bearing twice over: `build_flow` also calls `cfg.load_offsets()`
-and `cfg.load_teams()` at compile time, and both `open()` unconditionally. Point it at the default
-`./out` and you get a phantom human-in-the-loop blocker that is really a config error.
-
-```yaml
-# solutions/offside/config.yaml
-work_dir: ./out_nocommit
-flow_type: batch
-cameras:
-  cam0: {video: data_nocommit/cam0.mp4}
-  cam1: {video: data_nocommit/cam1.mp4}
-  cam2: {video: data_nocommit/cam2.mp4}
-pitch: {length: 105.0, width: 68.0}
-attack_direction: auto
-team_names: {0: Reds, 1: Blues}
-trim: {start_s: null, end_s: null}
-detector: {checkpoint: null, resolution: 1288, conf_ball: 0.15, tile_inference: false}
-device: {detector: gpu, tracker: cpu, pose: cpu}
-fusion: {ref_fps: 30.0, quorum: 2}
-debug_overlays: false
-```
-
-Camera paths relative to the config dir are correct and consistent: `common.load_config` joins them
-against the config dir and `resolve_mounts` joins the same raw values against the graph dir,
-producing identical absolute paths — which is what a same-path mount requires.
-
-Success artifact: `out_nocommit/results/verdicts.json`. The visualizer writes it in `close()`
-**unconditionally**, so it appears even on a clip with zero offside events. The per-verdict files
-(`verdict_N.json`, `still_N_*.png`, `clip_N_*.avi`) only appear when a verdict fires — **their
-absence is not a failure.**
-
-`prepare.py` also runs `download_weights.py` (RF-DETR + RTMW pose) relying on the `get_file` cache;
-the first run pays the download and a dead mirror is an infra blocker.
-
-### Summary
-
-| Solution | Repo | Dockerfile | GPU | Success artifact |
+| Solution | Dockerfile | GPU | Prep fetches | Success artifact |
 |---|---|---|---|---|
-| `toy_calculator` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/report.json` with `matches_expected: true` |
-| `toy_router` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/counts.json` with `matches_expected: true` |
-| `toy_fusion` | core | `Dockerfile` (CPU) | 0 | `out_nocommit/latest.json` mtime advancing (REALTIME); bounded runs add `fusion_summary.json` |
-| `face_obfuscation` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/blurred_video.avi` |
-| `human_tracking` | contrib | `Dockerfile` (CPU) | 0 | `out_nocommit/annotated_video.avi` |
-| `offside` | contrib | `gpu.Dockerfile` | 3 | `out_nocommit/results/verdicts.json` |
+| `face_obfuscation` | `Dockerfile` (CPU by default) | 0 (1 for the detector with `device: gpu`) | sample clip, face SSD weights | `<work_dir>/blurred_video.avi` |
+| `human_tracking` | `Dockerfile` (CPU by default) | 0 (1 each for pose and encoder with `device: gpu`) | sample clip, encoder and pose weights | `<work_dir>/annotated_video.avi` |
 
-## Deploy
+Both run with every default answered by Enter: the bundled sample clip, CPU, batch. The core
+repo's `toy_*` solutions are the cheapest first target on a new cluster — they build in seconds
+and need no weights — and `videoflow run-local` on one of them proves the framework path with no
+cluster at all.
+
+## Local run
 
 ```bash
-cd /home/jadiel/workspace/videoflow-contrib/solutions/offside
-videoflow deploy offside.py \
-    --no-build --image videoflow-offside:r1 \
-    --config config.yaml --non-interactive --no-prepare \
-    --namespace videoflow \
-    --flow-id offside --run-id offside-a1 \
-    --gpu-runtime-class nvidia --keep-infra
+cd solutions/human_tracking
+videoflow run-local human_tracking.py --non-interactive      # with a config.yaml in place
 ```
+
+The graph does not import on the host (no torch here), so run-local builds the solution image
+(and `videoflow-base` before it), runs `prepare.py` and the compile inside it, starts a dev
+NATS + Redis in docker unless something already listens on 4222/6379, and runs every worker as
+a container of the image on the host network (`docker ps` shows them as `vf-<flow>-<run>-<node>-<replica>`).
+Success: exit 0, `Flow <id> completed.`, and a fresh, non-empty `out/annotated_video.avi`
+(`stat -c '%y %s' out/annotated_video.avi`). Files written by the containers are root-owned.
+
+## Cluster deploy
+
+```bash
+cd solutions/human_tracking
+videoflow deploy human_tracking.py --non-interactive --flow-id human-tracking --run-id ht-1
+```
+
+Everything else comes from the profile (or the defaults, on a laptop cluster). The flags:
 
 | Flag | Why |
 |---|---|
-| `--no-build --image <ref>:rN` | Builds are yours; dodges the GPU-Dockerfile guess and the `:latest` pull policy. |
-| `--config config.yaml` | Feeds mount resolution and `prepare.py`. The file must *also* be at `<solution>/config.yaml`. |
-| `--non-interactive` | No TTY. Gives a useful `SystemExit` listing required inputs when the config is missing. |
-| `--namespace videoflow` | Isolates the auto-provisioned dev NATS+Redis; makes cleanup one command. |
-| `--flow-id` + `--run-id` | Deterministic, and **required** by `teardown` and by every `-l videoflow.io/run-id=` selector. Use DNS-1123-safe hyphens, never `human_tracking`. Increment the run-id every attempt; never reuse one. |
-| `--gpu-runtime-class nvidia` | Mandatory; the preflight only warns. Harmless on CPU solutions. |
+| `--non-interactive` | No TTY. Gives a useful `SystemExit` listing required inputs when `config.yaml` is missing. |
+| `--flow-id` + `--run-id` | Deterministic, and what `teardown` and every `-l videoflow.io/run-id=` selector need. DNS-1123-safe hyphens, never `human_tracking`. Increment the run-id every attempt; never reuse one. |
 | `--keep-infra` | Amortises NATS+Redis across runs instead of paying recreation each time. |
-| *(no `--keep` by default)* | Deploy already dumps failed nodes' logs before teardown, and auto-teardown frees the GPUs. A kept offside run holds 3 of 4 and makes the next attempt go Pending. Add `--keep` only for a deliberate diagnostic re-run, then tear down immediately. |
+| *(no `--keep` by default)* | Deploy dumps failed nodes' logs before teardown, and auto-teardown frees the GPUs. Add `--keep` only for a deliberate diagnostic re-run, then tear down immediately. |
 
-Wrap it in `timeout` (say 1800s for offside, 900s for the CPU ML solutions, 300s for the toys —
-a toy BATCH run is seconds once pods start, and a REALTIME deploy returns after the ~30s
-schedulability check). A pod stuck in `ImagePullBackOff` is *not* "Unschedulable", so the 60s
-watchdog never fires and the wait can hang indefinitely. Treat a timeout as a triage signal, not
-a crash.
+What deploy does with it: builds the image the template's `x-gpu` selects, tags it by content,
+pushes it to the profile's registry (or side-loads it on a single-node cluster), runs
+`prepare.py` and the compile inside it, puts the cluster's `nvidia` RuntimeClass on GPU pods,
+provisions the dev broker in the namespace (reused when present), applies, waits for the BATCH
+flow, prints `Flow <id> completed.`, tears the run down.
 
-Long builds and long BATCH runs exceed the foreground command timeout — run them in the background
-with output tee'd to a log, then poll.
+Wrap it in `timeout` (900s for the CPU solutions). A pod stuck in `ImagePullBackOff` is not
+"Unschedulable", so the 60s watchdog never fires and the wait can hang; treat a timeout as a
+triage signal, not a crash. Long builds and runs exceed the foreground command timeout — run
+them in the background with output tee'd to a log, then poll.
 
 **Success is a conjunction:**
 
 ```bash
-grep -q 'Flow offside completed\.' deploy.log                          # 1. the completion line
-kubectl get jobs -n videoflow -l videoflow.io/run-id=offside-a1        # 2. nothing failed
-find solutions/offside/out_nocommit/results -name verdicts.json -newermt '-30 minutes'   # 3. FRESH artifact
+grep -q 'Flow human-tracking completed\.' deploy.log                       # 1. the completion line
+kubectl get jobs -n videoflow -l videoflow.io/run-id=ht-1                   # 2. nothing left behind
+find <work_dir> -name annotated_video.avi -newermt '-30 minutes' -size +0   # 3. a FRESH, non-empty artifact
 ```
 
 Point 3 needs the mtime guard specifically: prep and compile run as root in-image, so a previous
 run's artifact is root-owned and cannot be deleted without sudo. Existence alone is not evidence.
+
+## Offline validation — before a cluster deploy you cannot afford to repeat
+
+```bash
+videoflow deploy human_tracking.py --dry-run --non-interactive > render.yaml
+```
+
+With the image built, deploy compiles **inside the solution image** (the graph dir mounted at
+the same absolute path), so a clean dry run has already proven: the config parses, prep
+artifacts resolve, contrib imports, every node's `get_params()` contract holds, the graph
+compiles, and the manifests render — with no cluster. A render never touches the cluster, so it
+sets no RuntimeClass by itself; pass `--gpu-runtime-class nvidia` to see the GPU pods as the
+live deploy renders them. Then check that every path-valued entry of each node's
+`VF_NODE_PARAMS_JSON` falls under one of that workload's `volumeMounts` (or a claim `subPath`).
+
+**Do not use `videoflow explain` for this** — it only compiles on the host, where
+`videoflow_contrib` isn't installed, so it always fails here.
 
 ## Observing a run
 
@@ -472,8 +193,7 @@ beat. `/metrics` carries `videoflow_messages_{published,received,processed,faile
 which is how you tell a flow that is working from one that is merely up, plus
 `videoflow_errors_total{node,code,disposition}`, which is how you tell *what* is failing.
 
-**Triage failures by code, not by log volume.** `videoflow dlq ls` groups by the stable code,
-which is the question you actually have:
+**Triage failures by code, not by log volume.** `videoflow dlq ls` groups by the stable code:
 
 | What you see | What it means | Where the fix is |
 |---|---|---|
@@ -488,20 +208,18 @@ missing classifier registration: the failure is being read as transient and retr
 ## Teardown
 
 ```bash
-videoflow teardown --flow-id offside --run-id offside-a1 \
-    --nats <url> --namespace videoflow --gpu-mode exclusive
+videoflow teardown --flow-id human-tracking --run-id ht-1 --nats <url>        # namespace from the profile
 
-# once, at the very end:
-videoflow teardown --flow-id offside --run-id offside-aN \
-    --nats <url> --namespace videoflow --infra
+# once, at the very end (removes the dev NATS/Redis deploy provisioned):
+videoflow teardown --flow-id human-tracking --run-id ht-N --nats <url> --infra
 ```
 
-`--flow-id`, `--run-id` and `--nats` are all required; `--infra` additionally requires
-`--namespace`. **Capture the NATS URL from the teardown hint deploy prints** rather than guessing
-it. Carry `--gpu-mode` — teardown is the only place a GPU strategy's `cleanup()` runs on the
-REALTIME path.
+`--flow-id` and `--run-id` are required; `--nats` too unless the profile names the broker
+(**capture the URL from the teardown hint deploy prints** rather than guessing it); `--infra`
+additionally requires a namespace. Carry `--gpu-mode` when deploy printed it — teardown is the
+only place a GPU strategy's `cleanup()` runs on the REALTIME path.
 
-Always tear a run down before advancing to the next run-id, and always before switching solutions
-if the previous one held GPUs. Teardown is run-scoped, so it won't disturb a concurrent run — but
-**omitting `--run-id` from a manual label delete removes every run of the flow.** A pre-existing
-broker is reused and never deleted, by design in both `infra.py` and `localinfra.py`.
+Always tear a run down before advancing to the next run-id. Teardown is run-scoped, so it won't
+disturb a concurrent run — but **omitting `--run-id` from a manual label delete removes every run
+of the flow.** A pre-existing broker is reused and never deleted, by design in both `infra.py`
+and `localinfra.py`.

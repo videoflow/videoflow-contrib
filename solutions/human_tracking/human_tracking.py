@@ -10,9 +10,10 @@ command — see README.md):
 
     videoflow deploy human_tracking.py
 
-Local run, all workers as subprocesses on this machine:
+Local run (the workers run inside the solution image, since its dependencies
+are not installed on the host):
 
-    python human_tracking.py --config config.yaml
+    videoflow run-local human_tracking.py
 
 The glue nodes live in ``human_tracking_nodes.py`` (a real importable module) so
 distributed workers can reconstruct them by class path (the local engine puts
@@ -40,8 +41,11 @@ from videoflow.producers import VideofileReader
 
 def build_flow(cfg=None):
     if cfg is None:
-        # Module-dir-relative so `videoflow deploy` works from any cwd.
-        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
+        # `deploy` and `run-local` export the config they resolved (--config, or the
+        # generated one) as VF_SOLUTION_CONFIG; otherwise the config.yaml beside
+        # this module, so the graph builds from any cwd.
+        here = os.path.dirname(os.path.abspath(__file__))
+        cfg = load_config(os.environ.get('VF_SOLUTION_CONFIG') or os.path.join(here, 'config.yaml'))
     from videoflow_contrib.detectron2 import Detectron2HumanPose, HumanPoseAnnotator
     from videoflow_contrib.humanencoder import HumanEncoder
     from videoflow_contrib.tracker_deepsort import DeepSort

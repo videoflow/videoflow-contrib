@@ -2,9 +2,9 @@
 Runs a TensorFlow instance segmenter over a sample intersection video and writes an
 annotated copy to output.avi.
 
-Local run (needs a NATS server):
+Local run (starts a dev NATS in docker when none is listening):
 
-    python examples/segmenter.py
+    videoflow run-local examples/segmenter.py
 
 Deploy to Kubernetes:
 

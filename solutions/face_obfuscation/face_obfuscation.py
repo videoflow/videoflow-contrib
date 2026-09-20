@@ -9,9 +9,10 @@ command — see README.md):
 
     videoflow deploy face_obfuscation.py
 
-Local run, all workers as subprocesses on this machine:
+Local run (the workers run inside the solution image, since its dependencies
+are not installed on the host):
 
-    python face_obfuscation.py --config config.yaml
+    videoflow run-local face_obfuscation.py
 
 The glue nodes live in ``face_obfuscation_nodes.py`` (a real importable module)
 so distributed workers can reconstruct them by class path (the local engine puts
@@ -31,8 +32,11 @@ from videoflow.producers import VideofileReader
 
 def build_flow(cfg=None):
     if cfg is None:
-        # Module-dir-relative so `videoflow deploy` works from any cwd.
-        cfg = load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml'))
+        # `deploy` and `run-local` export the config they resolved (--config, or the
+        # generated one) as VF_SOLUTION_CONFIG; otherwise the config.yaml beside
+        # this module, so the graph builds from any cwd.
+        here = os.path.dirname(os.path.abspath(__file__))
+        cfg = load_config(os.environ.get('VF_SOLUTION_CONFIG') or os.path.join(here, 'config.yaml'))
     from videoflow_contrib.detector_tf import TensorflowObjectDetector
     from videoflow_contrib.tracker_sort import KalmanFilterBoundingBoxTracker
 
@@ -40,7 +44,7 @@ def build_flow(cfg=None):
     trk = cfg.tracker
     blur = cfg.blur
 
-    reader = VideofileReader(cfg.input_video, name='reader')
+    reader = VideofileReader(cfg.resolve_input(), name='reader')
     frame = FrameIndexSplitter(name='frame')(reader)
     faces = TensorflowObjectDetector(
         num_classes=int(det.get('num_classes', 1)),

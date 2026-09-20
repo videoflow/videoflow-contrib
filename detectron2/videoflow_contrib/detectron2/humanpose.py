@@ -83,6 +83,9 @@ class HumanPoseAnnotator(ProcessorNode):
         - Returns:
             - im: np.array of shape (h, w, 3) annotated with keypoints on it.
         '''
+        # The frame arrives read-only (a view over the message bytes) and OpenCV
+        # draws in place: annotate a private, writeable copy.
+        im = im.copy()
         for _, person_keypoints in enumerate(frame_keypoints):
             visible = {}
             for idx, keypoint in enumerate(person_keypoints):

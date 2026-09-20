@@ -21,5 +21,10 @@ ENV TF_USE_LEGACY_KERAS=1
 # appears in VF_NODE_CLASS). Its dependencies come from pyproject.toml; videoflow is already in the base image.
 COPY . ./
 RUN uv pip install --system --no-cache .
+# tensorflow pins protobuf<5, which downgrades the base image's protobuf below the
+# >=5.27 the generated videoflow.v1 wire modules require — every worker in the image
+# would then die at import. Restore the core floor, below 6 (protobuf 6 removed
+# MessageFactory.GetPrototype, which tensorflow < 2.18 still calls).
+RUN uv pip install --system --no-cache 'protobuf>=5.27,<6'
 
 # ENTRYPOINT ["python", "-m", "videoflow.worker"] is inherited from the base image.

@@ -6,6 +6,11 @@ It includes an updated version of Tracktor for Pytorch 1.3 with an improved obje
 
 ## Installing
 
+From this directory, into an environment that already has videoflow (installed
+from the sibling checkout) and torch: `pip install .` — or build the image
+(`docker build -f Dockerfile -t videoflow-contrib-tracktor .`, `gpu.Dockerfile`
+for CUDA), which is what a deploy uses.
+
 ## Using two GPUs
 
 Tracktor holds two models — the Faster R-CNN detector and the ResNet-50 reid
