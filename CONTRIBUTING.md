@@ -62,8 +62,10 @@ and there should be sections for `Arguments`, `Returns` and
 3. Write tests. Your code should have full unit test coverage.
 If you want to see your PRs merged promptly, this is crucial.
 
-4. Run our test suite locally. It is easy: from the
-Videoflow folder, simply run ``py.test tests/``
+4. Run the tests of the component you touched locally: from its
+directory, simply run ``pytest`` (there is deliberately no repo-wide
+run — the components pin mutually incompatible ML stacks). For a
+solution, run it: ``videoflow run-local <name>.py``.
 
 
 5. Make sure all tests are

@@ -21,14 +21,17 @@ videoflow-contrib/
 │   ├── videoflow_contrib/<name>/   native namespace package
 │   │   └── __init__.py             re-exports the node classes
 │   └── tests/                      optional
-└── solutions/{offside, human_tracking, face_obfuscation}/
+└── solutions/{human_tracking, face_obfuscation}/
 ```
 
-Every solution here depends on ML components, so all of them need models and
-footage to run. The dependency-free framework exercisers that used to live here
-(`toy_calculator`, `toy_fusion`, `toy_router`) now live in the **core** repo at
-[../videoflow/solutions/](../videoflow/solutions/), where they double as its
-end-to-end integration tests. They import no contrib code, so they remain the
+Every solution here depends on ML components, so all of them need models to run
+(both ship a bundled sample clip, fetched by their prep hook). Their stacks are
+never installed on the host: `videoflow run-local` and `deploy` build the
+solution image and run the prep hook, the compile and every worker inside it.
+The dependency-free framework exercisers that used to live here
+(`toy_calculator`, `toy_fusion`, `toy_router`, `toy_recovery`) live in the **core**
+repo at [../videoflow/solutions/](../videoflow/solutions/), where they double as
+its end-to-end integration tests. They import no contrib code, so they remain the
 cheapest first target for any deploy verification — reach for them (from the core
 checkout) before spending minutes on an ML solution.
 
@@ -49,6 +52,9 @@ Everything is currently at version `1.0.0`.
 ## Commands
 
 ```bash
+uv tool install --editable '../videoflow[all]'   # videoflow itself, from the sibling checkout (not on PyPI)
+cd solutions/<name> && videoflow run-local <name>.py   # a solution, locally (workers in its image)
+cd solutions/<name> && videoflow deploy <name>.py      # ... or on the cluster kubectl points at
 cd <component> && uv build          # build the wheel
 cd <component> && pytest            # run that component's tests
 ./validate-components.sh            # validate every component.yaml
@@ -58,8 +64,7 @@ uv tool install pre-commit && pre-commit install
 **pre-commit must be >= 3.2.0** — the pinned `pre-commit-hooks` v5 uses the renamed stages, and an
 older binary fails with `InvalidManifestError: ... but got: 'pre-commit'`. Ubuntu's packaged
 2.17.0 at `/usr/bin/pre-commit` is a common culprit; install into `~/.local/bin` and keep that
-ahead of `/usr/bin` on `PATH`. See
-[../videoflow/CLAUDE.md](../videoflow/CLAUDE.md#commands) for the full explanation.
+ahead of `/usr/bin` on `PATH`.
 
 There is no pre-push hook here (unlike core) because there is no repo-wide test run — see below.
 
@@ -70,15 +75,15 @@ exercised in its own image. This is why `.pre-commit-config.yaml` has no pytest 
 this by adding a root test runner.
 
 Only a handful of packages have tests today (`offside_engine`, `detector_tf`, `soccer_detector`,
-`team_classifier`, `pitch_calib`). New components should ship tests for whatever logic doesn't
-require model weights.
+`team_classifier`, `pitch_calib`, `multiview_fuser`, `vlm_caption`). New components should ship
+tests for whatever logic doesn't require model weights.
 
 ## Python conventions
 
-Python 3.12 everywhere. **The core repo's [CLAUDE.md](../videoflow/CLAUDE.md#python-conventions)
-is the authority** — the prescriptive/descriptive split there applies here unchanged. In short:
-type-hint every parameter and return in new code; match the surrounding file's existing style
-rather than reformatting it.
+Python 3.12 everywhere. **The core repo's conventions are the authority** (its
+[CONTRIBUTING.md](../videoflow/CONTRIBUTING.md) and the style of its `videoflow/` package). In
+short: type-hint every parameter and return in new code; match the surrounding file's existing
+style rather than reformatting it.
 
 Two generations of style coexist here. Older files use
 `from __future__ import absolute_import, ...`, `super(Class, self).__init__`, and spaced kwargs
@@ -113,7 +118,7 @@ image's `python -m videoflow.worker` must be inherited. The GPU variant must be 
 **Store every constructor argument verbatim as `self._<name>`.** Nodes are rebuilt inside their
 worker container via `type(node)(**get_params())`, so a param not stored under a matching
 attribute raises `AttributeError` at graph-build time. Full contract, including when to override
-`get_params()`: [../videoflow/.claude/docs/NODE_CONTRACT.md](../videoflow/.claude/docs/NODE_CONTRACT.md).
+`get_params()`: [.claude/agents/videoflow-author.md](.claude/agents/videoflow-author.md).
 
 **If a subclass fixes a parent's parameter, pop it first** — `kwargs.pop('nb_tasks', None)` before
 passing a literal, or reconstruction collides with the captured value. `TfliteObjectDetector` is
@@ -185,7 +190,7 @@ your component is a drop-in for others of its kind.
   Read this first.
 - **`detector_tf/`** — the reference `ProcessorNode`, including the fixed-parameter idiom.
 - **`synced_video_reader/`** — the canonical hand-written `get_params()` override.
-- **`solutions/offside/`** — the fullest solution.
+- **`solutions/human_tracking/`** — the fullest solution.
 - **`../videoflow/solutions/toy_calculator/`** — the smallest complete solution (in the core
   repo); read it before writing a new one.
 
@@ -201,8 +206,8 @@ A change isn't done until the docs describing it are updated **in the same commi
 - [.claude/agents/videoflow-author.md](.claude/agents/videoflow-author.md) — when the node contract
   or sub-package layout changes.
 - [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — when a solution's config keys,
-  prep artifacts, or required deploy flags change. Its recipes are executable, so they go stale
-  silently and only fail on the next cluster run.
+  prep artifacts, or the deploy/run-local behaviour change. Its recipes are executable, so they
+  go stale silently and only fail on the next cluster run.
 - [../videoflow/docs/source/user-documentation/error-handling-and-recovery.rst](../videoflow/docs/source/user-documentation/error-handling-and-recovery.rst)
   — when a component's disposition choice, classifier registration or exit code changes. That
   page is the user-facing model these conventions implement.
@@ -219,7 +224,7 @@ A change isn't done until the docs describing it are updated **in the same commi
 - [.claude/docs/ADDING_A_COMPONENT.md](.claude/docs/ADDING_A_COMPONENT.md) — checklist for a new
   sub-package.
 - [.claude/docs/SOLUTIONS.md](.claude/docs/SOLUTIONS.md) — anatomy of a solution and how it deploys.
-- [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — cluster preconditions, the
-  mandatory deploy flags, and the per-solution recipes.
+- [.claude/docs/DEPLOY_VERIFY.md](.claude/docs/DEPLOY_VERIFY.md) — cluster preconditions (probes),
+  the cluster profile, and the per-solution recipes.
 - [README.md](README.md) — the user-facing guide.
-- [../videoflow/CLAUDE.md](../videoflow/CLAUDE.md) — the core framework.
+- [../videoflow/README.md](../videoflow/README.md) — the core framework (install, deploy, images, clusters).

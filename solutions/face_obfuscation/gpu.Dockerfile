@@ -8,8 +8,8 @@
 # Build from the videoflow-contrib repo ROOT (context must see the sub-packages):
 #   docker build -f solutions/face_obfuscation/gpu.Dockerfile -t videoflow-contrib-face-obfuscation:gpu .
 #
-# Normally built for you: `videoflow deploy face_obfuscation.py` picks this file
-# when the local docker daemon has the NVIDIA runtime.
+# Normally built for you: `videoflow deploy face_obfuscation.py` (and `run-local`)
+# pick this file when the config's `device` is gpu (the template's x-gpu).
 ARG BASE_IMAGE=videoflow-base:py3.12-cuda
 FROM ${BASE_IMAGE}
 
@@ -21,9 +21,10 @@ RUN uv pip install --system --break-system-packages --no-cache -r requirements.t
 
 # tensorflow pins protobuf<5, which silently downgrades the base image's protobuf
 # below the >=5.27 the generated videoflow.v1 wire modules require (runtime_version)
-# — every worker in the image then dies at import. Restore the core floor;
-# tensorflow runs fine against the newer runtime.
-RUN uv pip install --system --break-system-packages --no-cache 'protobuf>=5.27'
+# — every worker in the image then dies at import. Restore the core floor, but
+# below 6: protobuf 6 removed MessageFactory.GetPrototype, which tensorflow
+# < 2.18 still calls (the 5.x line keeps it and satisfies videoflow.v1).
+RUN uv pip install --system --break-system-packages --no-cache 'protobuf>=5.27,<6'
 
 # The contrib sub-packages this solution's graph imports. --no-deps: videoflow is
 # already in the base image.

@@ -2,9 +2,9 @@
 Runs a Detectron2 human-pose estimator over a sample video and writes an annotated
 copy to pose.avi.
 
-Local run (needs a NATS server):
+Local run (starts a dev NATS in docker when none is listening):
 
-    python examples/humanpose_example.py
+    videoflow run-local examples/humanpose_example.py
 
 Deploy to Kubernetes:
 

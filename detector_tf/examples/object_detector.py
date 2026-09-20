@@ -2,9 +2,9 @@
 Runs a TensorFlow object detector over a sample intersection video and writes an
 annotated copy to output.avi.
 
-Local run (needs a NATS server):
+Local run (starts a dev NATS in docker when none is listening):
 
-    python examples/object_detector.py
+    videoflow run-local examples/object_detector.py
 
 Deploy to Kubernetes:
 

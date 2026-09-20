@@ -5,8 +5,13 @@
 # Where outputs go. Mounted into the pods, so the blurred video lands here.
 work_dir: ./out
 
-# The video to obfuscate (required).
-input_video: /data/video.mp4
+# The video to obfuscate. Leave empty (or omit) to use the bundled sample clip
+# (people_walking.mp4), which prepare.py downloads into work_dir. It lives in
+# work_dir rather than the shared model cache because this path is baked into the
+# reader's parameters at compile time and must resolve to the same absolute
+# location inside the workers -- work_dir is mounted at an identical path. Your
+# own footage: an absolute path (mounted read-only into the workers).
+input_video: ''
 
 # Output filename, written inside work_dir. Must end in .avi — videoflow's
 # VideofileWriter only supports that container.

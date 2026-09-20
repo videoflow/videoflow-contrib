@@ -9,8 +9,8 @@ description: >-
   infrastructure problems that no code change can fix — it fixes the first two
   and re-verifies, and reports the third and stops. Use it for requests like
   "do the solutions still work", "deploy all the solutions to the cluster",
-  "verify offside end to end", "check contrib against core master", or "the
-  flow works locally but fails in the cluster".
+  "verify human_tracking end to end", "check contrib against core master", or
+  "the flow works locally but fails in the cluster".
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -46,44 +46,36 @@ The commands, cluster preconditions and per-solution recipes live in
 CUDA build.** The probes in the runbook's precondition section take seconds and rule that out.
 Run every one of them first. **Never start an image build before they pass.**
 
-The one that most often fails: loading a locally-built image into k3s runs
-`docker save <img> | sudo k3s ctr images import -`, so it needs **passwordless sudo**. If
-`sudo -n true` fails and the containerd socket isn't reachable, images cannot reach the cluster
-at all, and no code change in either repo fixes it.
+The ones that most often fail: on a **single-node k3s** loading a locally built image runs
+`docker save <img> | sudo k3s ctr images import -` and needs passwordless sudo; on a
+**multi-node** cluster there must be a registry the nodes pull from, named in the cluster
+profile (`registry:`, plus `push_tool: crane` for plain HTTP). If neither works, images cannot
+reach the cluster at all, and no code change in either repo fixes it.
 
 When that is the situation, still run the whole offline half of the pipeline before you report —
-and run the three `toy_*` solutions **end to end with `videoflow run-local`** from the core
-checkout (`../videoflow/solutions/`), which needs no image and no cluster. They import no
-contrib packages, so they are the only solutions that can do this; core also runs them as its
-integration suite, so `cd ../videoflow && uv run pytest tests/integration/test_toy_solutions.py`
-proves the same ground in one command. A blocked report that also says *"every solution compiles,
-renders correct manifests, requests exactly the GPUs it should, has every baked path under a
-declared mount — and the framework path itself is proven end to end locally by the toys"* is worth
-far more than one that says "sudo failed".
+and run every solution **end to end with `videoflow run-local`**: the `toy_*` solutions from the
+core checkout (`../videoflow/solutions/`, no image, no cluster; `cd ../videoflow && uv run pytest
+tests/integration/local/test_toy_solutions.py` does them in one command) and the two ML
+solutions here, whose workers run-local runs inside their images. A blocked report that also
+says *"every solution runs locally, compiles, renders correct manifests, requests exactly the
+GPUs it should, has every baked path under a declared mount"* is worth far more than one that
+says "sudo failed".
 
 ## Images
 
-**Build the images yourself; never let `videoflow deploy` autobuild them.** Pass
-`--no-build --image <ref>` on every invocation. Two reasons, both verified:
-
-- Autobuild chooses `gpu.Dockerfile` whenever the *docker daemon* has an nvidia runtime, which
-  has nothing to do with the flow's device placement. Left alone it builds a CUDA image for
-  CPU-only solutions.
-- Autobuild tags `:latest`, and core sets no `imagePullPolicy` anywhere. Kubernetes defaults
-  `:latest` to `imagePullPolicy: Always`, so a locally-imported image is re-pulled from a
-  registry that doesn't have it → `ImagePullBackOff`.
-
-**Tag immutably and increment on every rebuild** (`:r1`, `:r2`, …). A non-`:latest` tag gets
-`IfNotPresent`, which is what makes a locally-loaded image usable — and which is exactly why
-reusing a tag after a fix silently runs the **stale** image. If a fix appears to have no effect,
-suspect a reused tag before you suspect your diagnosis.
+**Let `videoflow deploy` build the images.** It picks the Dockerfile from the flow (the
+template's `x-gpu`, else the compiled graph's device placement — never the docker daemon),
+deploys the image under a **content-addressed tag** (`videoflow-<name>:<12 hex>`, so a fix is
+always a new tag and `IfNotPresent` never runs a stale image), and pushes it to the profile's
+registry on a multi-node cluster. `run-local` builds and reuses the very same image. Pass
+`--no-build --image <ref>` only to pin a specific image you are bisecting.
 
 A **core** fix invalidates every image, because `videoflow` is baked into `videoflow-base` and
 the solution images build on top of it. Say so in the report; it is the expensive branch.
 
 ## What "it works" means
 
-All three contrib solutions default to `flow_type: batch`. The REALTIME reference target is the
+Both contrib solutions default to `flow_type: batch`. The REALTIME reference target is the
 core repo's `toy_fusion`, which defaults to `realtime`.
 
 - **BATCH** — `videoflow deploy` blocks until the flow finishes, prints `Flow {flow_id}
@@ -115,23 +107,24 @@ Running means the container started. Ready means the node opened. Neither means 
 
 1. Record both repos' branch and short SHA. It goes at the top of the report.
 2. Run the precondition probes. Stop here if one is a blocker.
-3. Build the base images once, then each solution image explicitly with the correct Dockerfile
-   and an immutable tag. Guard every build so a rerun doesn't rebuild what exists.
-4. Smoke-test CUDA inside the GPU image immediately after building it. One `docker run` now
-   converts a late, expensive, deep-in-a-worker failure into an early cheap one.
+3. Write the cluster profile for the cluster (the runbook shows the shape) unless it is a
+   single-node laptop cluster. Let the first deploy build `videoflow-base` and the solution
+   images; docker's layer cache makes a rerun free.
+4. For a GPU image, smoke-test CUDA inside it immediately after building it. One `docker run`
+   now converts a late, expensive, deep-in-a-worker failure into an early cheap one.
 
 **Per solution.**
 
-5. **Offline first — this is the highest value step in the loop.** Write `<solution>/config.yaml`,
-   then render with `--dry-run --no-build --image <ref>`. That compiles *inside the solution
-   image*, so a clean dry run has already proven the config parses, prep artifacts resolve,
-   contrib imports, every node's `get_params()` contract holds, the graph compiles, and the
-   manifests render — with zero cluster involvement. Assert on the rendered YAML: the GPU count,
-   `runtimeClassName`, and that every path-valued node param falls under a declared `volumeMount`.
-   **Do not use `videoflow explain` for this** — it only compiles on the host, where
-   `videoflow_contrib` isn't installed, so it always fails here.
-6. Deploy with an explicit `--flow-id` and `--run-id`, `--no-build --image`, and
-   `--gpu-runtime-class nvidia`. The runbook explains each.
+5. **Local first — the highest value step in the loop.** `videoflow run-local <name>.py`
+   builds the image and runs prep, compile and every worker inside it with no cluster
+   involvement; a fresh artifact proves the config, the prep hook, contrib imports, every
+   node's `get_params()` contract, the graph and the wire format. Then render with `--dry-run`
+   and assert on the YAML: the GPU count, `runtimeClassName` (pass `--gpu-runtime-class nvidia`
+   to a render; a render never probes the cluster), and that every path-valued node param falls
+   under a declared `volumeMount` (or a claim `subPath`). **Do not use `videoflow explain` for
+   this** — it only compiles on the host, where `videoflow_contrib` isn't installed.
+6. Deploy with an explicit `--flow-id` and `--run-id`; everything cluster-specific comes from
+   the profile. The runbook explains each flag.
 7. Verify against the conjunction above. If it failed, collect the evidence *before* tearing
    anything down.
 8. Triage. Name the layer before you name the fix.
@@ -145,8 +138,6 @@ Running means the container started. Ready means the node opened. Neither means 
 | Symptom | Cause | Fix in |
 |---|---|---|
 | `FileNotFoundError: .../config.yaml` from `_compile_graph` | config isn't at `<solution>/config.yaml`; `--config` does **not** reach `build_flow` | the invocation |
-| `FileNotFoundError` on `offsets.json` / `teams.json` / `calib/*.json` | `work_dir` points at `./out` instead of the directory holding the prep artifacts | config |
-| `SystemExit: automatic calibration failed … run the manual click UI` | same root cause — prep found no existing artifacts | config, **not** a blocker |
 | `AttributeError: Cannot auto-capture constructor parameter 'x'` | ctor arg not stored as `self._x` | contrib node |
 | `TypeError: Object of type ndarray is not JSON serializable` | non-serializable node param | contrib node |
 | JSON parse error on the in-image compile output | `build_flow` printed to stdout — that stdout **is** the specs JSON | contrib solution |
@@ -156,11 +147,11 @@ Running means the container started. Ready means the node opened. Neither means 
 
 | Symptom | Cause | Fix in |
 |---|---|---|
-| `image load into k3s failed — retry manually: docker save … \| sudo k3s ctr images import -` | no passwordless sudo | **infra — stop** |
-| `provision Job did not complete within 180s`, pod `ImagePullBackOff` | `:latest` → `imagePullPolicy: Always` on a local-only image | use a non-`:latest` tag; core gap in `deploy/manifests.py` |
-| Fix applied but the old behaviour persists | tag reused → `IfNotPresent` kept the stale image | bump the tag |
+| `image load into k3s failed — retry manually: docker save … \| sudo k3s ctr images import -` | no passwordless sudo on a single-node k3s | **infra — stop** (or a registry in the profile) |
+| `provision Job did not complete within 180s`, pod `ImagePullBackOff` | the image is not where the nodes pull from: side-loaded on a multi-node cluster (no `registry:` in the profile), or a registry ref that was never pushed | the profile / the push |
+| Fix applied but the old behaviour persists | `--no-build --image` pinned an old ref (an autobuilt image is a new content tag every time) | drop the pin |
 | `Insufficient nvidia.com/gpu` / Pending 60s watchdog | demand > capacity, or a kept previous run still holds GPUs | reduce demand, or tear the old run down |
-| GPU pod runs but the model sees no device | missing `--gpu-runtime-class nvidia` | the invocation — not the code |
+| GPU pod runs but the model sees no device | the cluster registers no `nvidia` RuntimeClass (deploy sets it when one exists), or `--gpu-runtime-class none` was passed | the cluster, or the invocation — not the code |
 | `CUDA driver version is insufficient` | base-image CUDA newer than the host driver | core Dockerfile, or infra |
 | `kubectl apply failed` on a manifest | schema error | core `deploy/manifests.py` |
 
@@ -234,6 +225,8 @@ reviewable.
   and auto-teardown releases GPUs. Add `--keep` only for a deliberate diagnostic re-run under a
   fresh run-id, then tear it down immediately — a kept GPU run blocks the next attempt.
 - Keep the dev broker between runs with `--keep-infra`; tear it down with `--infra` once, at the end.
+- Never pass `--no-build --image` by habit: it pins whatever that ref is, and the content-addressed
+  autobuild is what keeps a fix and its image in step.
 
 ## The report
 
@@ -262,8 +255,8 @@ left behind, including `git diff --stat` for both repos.
    idempotency store) — so they shake out core and cluster bugs at near-zero cost, and a core
    fix can be re-verified against them before paying for the big rebuilds. Before any image
    exists, `videoflow run-local` on a toy proves the framework path with no cluster at all, and
-   `cd ../videoflow && uv run pytest tests/integration/test_toy_solutions.py` does all three in
-   one command. `offside` is the most likely to fail — three cameras, a multi-parent join, and GPU.
+   `cd ../videoflow && uv run pytest tests/integration/local/test_toy_solutions.py` does all four in
+   one command. `human_tracking` is the heavier of the two ML solutions (a detectron2 source build).
 4. **Collect evidence before teardown.** Once pods are gone, the logs are gone.
 5. **Name the layer before naming the fix.** If you can't tell which of the three it is, gather
    more evidence rather than guessing — a rebuild cycle costs far more than another
