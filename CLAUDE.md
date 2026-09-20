@@ -58,8 +58,9 @@ tags) via `set-version.py`, and CI's `--check` fails if any file disagrees. See
 
 ```bash
 uv tool install --editable '../videoflow[all]'   # videoflow itself, from the sibling checkout (or `pip install 'videoflow[all]'` from PyPI)
-cd solutions/<name> && videoflow run-local <name>.py   # a solution, locally (workers in its image)
+cd solutions/<name> && videoflow run-local <name>.py   # a solution from THIS checkout, locally (workers in its image)
 cd solutions/<name> && videoflow deploy <name>.py      # ... or on the cluster kubectl points at
+videoflow run-local videoflow-contrib://<name>         # the user's form: the released tag, fetched into ~/.videoflow/solutions
 cd <component> && uv build          # build the wheel
 cd <component> && pytest            # run that component's tests
 ./validate-components.sh            # validate every component.yaml

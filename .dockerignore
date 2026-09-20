@@ -1,0 +1,16 @@
+# Kept out of every docker build context rooted here. Solution images build from
+# the repo root (they COPY sibling component directories), so without this the
+# whole repository — including every solution's outputs — is sent to the daemon.
+# Nothing a Dockerfile COPYs is listed.
+.git
+.venv*
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+# Solution run artifacts: config answers, outputs, fetched clips and weights.
+**/out/
+**/config.yaml
+**/dist/
+data_nocommit/
