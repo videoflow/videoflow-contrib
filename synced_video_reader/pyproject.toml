@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_synced_video_reader"
-version = "1.0.2"
+version = "1.0.3"
 description = "Time-offset videofile producer for multi-camera event-time synchronization in Videoflow"
 license = { text = "MIT" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow>=1.0.2",
+    "videoflow>=1.0.3",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
