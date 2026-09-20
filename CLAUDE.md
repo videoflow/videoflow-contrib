@@ -47,17 +47,23 @@ The naming triple for a directory `foo_bar`:
 | Import path | `videoflow_contrib.foo_bar` |
 | Descriptor name | `videoflow/foo-bar` |
 
-Everything is currently at version `1.0.0`.
+All sub-packages share **one version, kept in lockstep with the core `videoflow` release**:
+contrib vX.Y.Z ships with core vX.Y.Z and pins `videoflow>=X.Y.Z`. `./set-version.py --current`
+prints it. Never edit a version string by hand — `.github/workflows/release.yml` bumps all 38
+files (pyproject `version` + `videoflow>=` floor, `component.yaml` `metadata.version` + image
+tags) via `set-version.py`, and CI's `--check` fails if any file disagrees. See
+[Releasing](README.md#releasing).
 
 ## Commands
 
 ```bash
-uv tool install --editable '../videoflow[all]'   # videoflow itself, from the sibling checkout (not on PyPI)
+uv tool install --editable '../videoflow[all]'   # videoflow itself, from the sibling checkout (or `pip install 'videoflow[all]'` from PyPI)
 cd solutions/<name> && videoflow run-local <name>.py   # a solution, locally (workers in its image)
 cd solutions/<name> && videoflow deploy <name>.py      # ... or on the cluster kubectl points at
 cd <component> && uv build          # build the wheel
 cd <component> && pytest            # run that component's tests
 ./validate-components.sh            # validate every component.yaml
+./set-version.py --check            # every sub-package declares the same version
 uv tool install pre-commit && pre-commit install
 ```
 
