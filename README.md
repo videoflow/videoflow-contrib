@@ -13,10 +13,11 @@ This contribution repository is both the proving ground for new functionality, a
 
 ## Quick start
 
-Clone both repositories side by side, install videoflow from its checkout (it is
-not on PyPI yet), and run a solution — locally or on the cluster `kubectl`
-points at. Nothing else goes on your machine: the ML stacks live in the
-solution images, which both commands build for you.
+Clone both repositories side by side, install videoflow from its checkout (or
+`pip install 'videoflow[all]'` from PyPI — the editable checkout is for working
+against unreleased core), and run a solution — locally or on the cluster
+`kubectl` points at. Nothing else goes on your machine: the ML stacks live in
+the solution images, which both commands build for you.
 
 ```bash
 git clone https://github.com/videoflow/videoflow
@@ -96,7 +97,8 @@ A component is one reusable node (or a small family of them) in its own
 sub-package. The checklist:
 
 1. **Package layout** — a top-level folder with a `pyproject.toml` (hatchling,
-   `dependencies = ["videoflow>=1.0.0", ...]`) and the code under
+   `dependencies = ["videoflow>=<current>", ...]` — the version every sibling
+   declares, `./set-version.py --current`) and the code under
    `videoflow_contrib/<name>/` as a native namespace package (no
    `videoflow_contrib/__init__.py`). Runtime deps go in `pyproject.toml`; a
    CUDA-differing build gets a `[project.optional-dependencies] gpu` extra.
@@ -264,6 +266,37 @@ and every automated step still has a manual override (`--config`, `--image`,
 [videoflow deployment guide](https://videoflow.github.io/videoflow/distributed/deploying-to-kubernetes.html)
 (source: `../videoflow/docs/source/distributed/deploying-to-kubernetes.rst`)
 for the full pipeline.
+
+## Releasing
+
+Every sub-package is released at **one version, in lockstep with the core
+`videoflow` release**: contrib vX.Y.Z ships with core vX.Y.Z and pins
+`videoflow>=X.Y.Z`. A contrib-only fix is released by bumping core's patch
+version. There is nothing to run here by hand — the core release triggers it:
+
+1. In `videoflow`, bump `videoflow/version.py`, merge to master, and run its
+   **Publish to PyPI** workflow. Before uploading, that workflow installs the
+   new core wheel and checks that this repo's descriptors still validate and
+   every sub-package still builds against it.
+2. Once the core tag exists, it dispatches this repo's **Release** workflow
+   (`.github/workflows/release.yml`) with the same version. That run waits until
+   `videoflow==X.Y.Z` is installable from PyPI, rewrites every `pyproject.toml`
+   and `component.yaml` with `./set-version.py X.Y.Z`, validates and builds all
+   the wheels, pushes a `Release vX.Y.Z` commit to master, and creates the
+   `vX.Y.Z` tag and GitHub Release with the wheels attached.
+
+If step 2 fails after core is already on PyPI, fix master and re-run it — the
+workflow is idempotent:
+
+```bash
+gh workflow run release.yml -R videoflow/videoflow-contrib --ref master -f version=X.Y.Z
+```
+
+Never edit a version string by hand: `./set-version.py --check` runs in CI and
+fails if any of the 38 files disagree. The other tags in this repository
+(`detector_tf`, `tracktor`, `models`, `offside_models`, `example_videos`, ...)
+are not versions; they are GitHub Releases that host model weights and sample
+clips, referenced by URL from the code. Leave them alone.
 
 ## Example Usage
 Consumers, producers and processors from the Videoflow-contrib library are used

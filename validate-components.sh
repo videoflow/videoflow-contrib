@@ -4,10 +4,10 @@
 #
 #   ./validate-components.sh
 #
-# Requires the `videoflow` package to be importable by `python` — installed from the
-# sibling checkout, e.g. `pip install -e '../videoflow[deploy]'` into the active
-# environment (videoflow is not on PyPI yet). Each sub-package that ships a
-# component.yaml is a marketplace-distributable component.
+# Requires the `videoflow` package to be importable by `python` — `pip install
+# 'videoflow[deploy]'` from PyPI, or `pip install -e '../videoflow[deploy]'` from the
+# sibling checkout when developing against unreleased core. Each sub-package that ships
+# a component.yaml is a marketplace-distributable component.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"

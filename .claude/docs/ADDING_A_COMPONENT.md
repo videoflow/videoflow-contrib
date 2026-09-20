@@ -35,12 +35,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_my_component"      # underscores
-version = "1.0.0"
+version = "1.0.0"                            # whatever `./set-version.py --current` prints
 description = "..."
 license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow>=1.0.0",
+    "videoflow>=1.0.0",                      # same version as above
     "numpy>=1.24",
 ]
 
@@ -54,6 +54,11 @@ only-include = ["videoflow_contrib/my_component"]   # required — namespace pac
 `only-include` is not optional. Without it the wheel claims the whole `videoflow_contrib`
 namespace and collides with every other contrib package.
 
+**The version is not yours to choose.** Every sub-package carries the one version the repo is
+at — `./set-version.py --current` — and the four places it appears (pyproject `version`,
+`videoflow>=` floor, `component.yaml` `metadata.version`, its image tags) must all agree.
+CI runs `./set-version.py --check` and fails the PR otherwise. The release workflow bumps them.
+
 ## `component.yaml`
 
 The machine-readable descriptor. It is what makes the component usable from a non-Python graph and
@@ -64,7 +69,7 @@ apiVersion: videoflow.io/v1
 kind: Component
 metadata:
   name: videoflow/my-component        # dashes
-  version: "1.0.0"
+  version: "1.0.0"                  # same version as pyproject.toml
   license: MIT
   description: One clear sentence.
 spec:
@@ -73,7 +78,7 @@ spec:
   runtime:
     pythonClass: videoflow_contrib.my_component.MyNode
     images:
-      cpu: ghcr.io/videoflow/contrib-my-component:1.0.0
+      cpu: ghcr.io/videoflow/contrib-my-component:1.0.0        # same version again
       gpu: ghcr.io/videoflow/contrib-my-component:1.0.0-cuda
   device: [cpu, gpu]
   params:

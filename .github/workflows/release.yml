@@ -1,0 +1,179 @@
+# Release every contrib sub-package at one version, in lockstep with the core `videoflow` release.
+#
+# The contract: contrib vX.Y.Z ships with core vX.Y.Z, and every sub-package pins
+# `videoflow>=X.Y.Z`. So this workflow takes a version that MUST already be on PyPI as
+# `videoflow`, and it is normally not started by a person at all — the core repo's
+# "Publish to PyPI" workflow dispatches it (`release-contrib` job in
+# videoflow/.github/workflows/publish.yml) right after it has created the core tag.
+#
+# What a run does, on master:
+#   1. waits until `pip install videoflow==X.Y.Z` actually resolves (the JSON API can say a
+#      release exists minutes before the CDN serves its files);
+#   2. rewrites the version in every pyproject.toml + component.yaml with ./set-version.py;
+#   3. validates every descriptor against that exact core and builds all the wheels;
+#   4. commits "Release vX.Y.Z" to master and pushes it;
+#   5. creates the vX.Y.Z tag and GitHub Release with the wheels attached.
+#
+# Nothing here goes to PyPI or a container registry. The wheels on the Release are the
+# installable artifact: `pip install videoflow_contrib_<name> @ <release asset URL>`.
+#
+# Re-running after a failure is safe: set-version is a no-op once the files are bumped, an
+# already-pushed commit has nothing to commit, and only the tag+Release remain to be created.
+# The tag is created by `gh release create` AFTER everything else succeeded, so a failed run
+# never leaves a tag that blocks the retry. The one non-retryable state is "master moved
+# under us" (someone merged between checkout and push): the push is refused and the run
+# fails; just re-run it against the new master.
+#
+# Manual fallback (e.g. core published but the dispatch failed):
+#   gh workflow run release.yml -R videoflow/videoflow-contrib --ref master -f version=X.Y.Z
+#
+# `dry_run=true` does steps 1-3 and uploads the wheels as a run artifact, then stops. It also
+# lifts the master-only guard so the workflow can be exercised from a branch.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "X.Y.Z — must equal the videoflow core version already on PyPI"
+        required: true
+        type: string
+      dry_run:
+        description: "Bump, validate and build only; do not commit, push or create a release"
+        type: boolean
+        default: false
+
+# Default to nothing; the job asks for exactly what it needs.
+permissions: {}
+
+# One release at a time, and never cancel one that may already have pushed the bump commit.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  V: ${{ inputs.version }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # push the bump commit; create the tag and the GitHub Release
+    steps:
+      - name: Refuse to release from anything but master
+        if: github.ref != 'refs/heads/master' && !inputs.dry_run
+        run: |
+          echo "::error::Releases must be run from master (got ${{ github.ref }}). Use dry_run to test from a branch."
+          exit 1
+
+      # The same shape set-version.py enforces; no dashes, so `-cuda` image suffixes stay
+      # unambiguous.
+      - name: Validate the version string
+        run: |
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-z]+[0-9]+)?$ ]]; then
+            echo "::error::version must look like 1.2.3 (or 1.2.3rc1), got '$V'"
+            exit 1
+          fi
+
+      # persist-credentials (the default) keeps github.token in the checkout so the push below
+      # works. A push made with that token does not trigger components.yml, which is fine:
+      # this run validates and builds exactly the tree it pushes.
+      - uses: actions/checkout@v4
+
+      - name: Fail if tag v${{ inputs.version }} already exists
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null; then
+            echo "::error::Tag v$V already exists; contrib $V was already released."
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Retry the real install rather than polling pypi.org's JSON API: a freshly uploaded
+      # release can be visible there while pip still gets a 404 from the files CDN. The
+      # deploy extra brings the component CLI and jsonschema for validate-components.sh.
+      - name: Wait for videoflow ${{ inputs.version }} on PyPI and install it
+        run: |
+          for attempt in $(seq 1 20); do
+            if pip install --no-cache-dir "videoflow[deploy]==$V"; then
+              exit 0
+            fi
+            echo "videoflow $V is not installable yet (attempt $attempt/20); retrying in 30s"
+            sleep 30
+          done
+          echo "::error::videoflow $V never became installable from PyPI. Has the core release run?"
+          exit 1
+
+      - name: Bump every sub-package to ${{ inputs.version }}
+        run: |
+          ./set-version.py "$V"
+          ./set-version.py --check "$V"
+
+      - name: Validate component descriptors against this core
+        run: ./validate-components.sh
+
+      - name: Build every wheel
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          for d in */pyproject.toml; do
+            dir="$(dirname "$d")"
+            echo "== $dir =="
+            ( cd "$dir" && uv build --wheel --out-dir "$GITHUB_WORKSPACE/dist" )
+          done
+          expected=$(ls -d */pyproject.toml | wc -l)
+          built=$(ls dist/*.whl | wc -l)
+          if [ "$built" -ne "$expected" ]; then
+            echo "::error::built $built wheels for $expected packages"
+            exit 1
+          fi
+          ls -1 dist
+
+      # Always uploaded, so a dry run leaves something to inspect.
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: dist/
+          if-no-files-found: error
+
+      # A plain push, never --force and never a rebase: the validation above ran on this tree,
+      # not on whatever master became meanwhile. A non-fast-forward rejection means master
+      # moved; the run fails before anything irreversible and can simply be re-run.
+      - name: Commit and push the version bump
+        id: push
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Version bump already committed; nothing to commit."
+          else
+            git commit -m "Release v$V"
+          fi
+          if ! git push origin HEAD:master; then
+            echo "::error::master moved while this release was running (push rejected). Re-run the workflow."
+            exit 1
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # `gh release create` creates the tag at --target when it does not exist. Release notes
+      # start from the previous v* tag: without --notes-start-tag, GitHub diffs from whatever
+      # release is marked Latest, and here that may be a model-weight bucket (offside_models,
+      # example_videos, ...) rather than a version.
+      - name: Create tag and GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(git ls-remote --tags --refs origin 'v*' | awk -F/ '{print $NF}' | sort -V | tail -1)
+          gh release create "v$V" dist/*.whl \
+            --target "${{ steps.push.outputs.sha }}" \
+            --title "v$V" \
+            --generate-notes ${prev:+--notes-start-tag "$prev"}

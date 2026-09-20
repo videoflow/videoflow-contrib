@@ -1,8 +1,13 @@
 name: components
 
-# Validate every component descriptor against the videoflow component schema, and
-# check each sub-package builds a wheel from its pyproject.toml (catches a broken
-# package definition before an image build would fail on `uv pip install .`).
+# Validate every component descriptor against the videoflow component schema, check that
+# every sub-package declares the one shared version (see set-version.py), and check each
+# sub-package builds a wheel from its pyproject.toml (catches a broken package definition
+# before an image build would fail on `uv pip install .`).
+#
+# videoflow is installed from core's master here on purpose: a PR that breaks against the
+# next core is the early warning. Validation against the released core happens at release
+# time (release.yml here, and the check-contrib gate in core's publish.yml).
 on:
   push:
     branches: [master]
@@ -16,6 +21,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Every sub-package is at the same version
+        run: ./set-version.py --check
       - name: Install videoflow with the deploy extra (component CLI + jsonschema)
         run: pip install "videoflow[deploy] @ git+https://github.com/videoflow/videoflow" jsonschema
       - name: Validate component descriptors

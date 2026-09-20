@@ -199,7 +199,7 @@ One reusable node family per top-level directory:
 
 ```
 <component>/
-├── pyproject.toml                     # hatchling; dependencies = ["videoflow>=1.0.0", ...]
+├── pyproject.toml                     # hatchling; dependencies = ["videoflow>=<current>", ...] (./set-version.py --current)
 ├── videoflow_contrib/<component>/     # native namespace pkg — NO videoflow_contrib/__init__.py
 │   └── __init__.py                    # exports the node class(es)
 ├── Dockerfile                         # ARG BASE_IMAGE=videoflow-base:py3.12
