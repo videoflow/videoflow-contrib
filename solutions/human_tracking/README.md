@@ -21,19 +21,29 @@ who cross paths keep their ids because the encoder distinguishes them visually.
 
 ## Run it
 
-With videoflow installed from the sibling checkout (see the
+With videoflow installed (`pip install 'videoflow[all]'`, see the
 [quick start](../../README.md#quick-start)) and docker running:
 
 ```bash
+videoflow run-local videoflow-contrib://human_tracking      # on this machine
+videoflow deploy videoflow-contrib://human_tracking         # on the cluster kubectl points at
+```
+
+That fetches this repository at your videoflow version into
+`~/.videoflow/solutions/videoflow-contrib@v<version>/` once and works from
+there — `config.yaml` and `out/` land next to the graph in that directory,
+which is printed on every run. From a checkout, the path form is the same
+thing and keeps them here:
+
+```bash
 cd solutions/human_tracking
-videoflow run-local human_tracking.py      # on this machine
-videoflow deploy human_tracking.py         # on the cluster kubectl points at
+videoflow run-local human_tracking.py
 ```
 
 Both ask the same questions the first time (Enter takes every default: CPU,
 batch), write `config.yaml`, build the solution image from `Dockerfile` (torch,
 TensorFlow and a detectron2 source build: ten minutes or so, once; and
-`videoflow-base` before it), run `prepare.py` inside it to fetch the sample clip
+`videoflow-base` before it, pulled from `ghcr.io/videoflow` or built from a core checkout), run `prepare.py` inside it to fetch the sample clip
 and every model's weights, and run the flow to completion. None of that stack is
 installed on your machine. `run-local` runs every worker as a container of the
 image against a dev NATS + Redis it starts in docker; `deploy` runs them as pods

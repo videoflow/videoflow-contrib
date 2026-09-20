@@ -140,8 +140,10 @@ RUN uv pip install --system --no-cache .
 ```
 
 The GPU variant uses `videoflow-base:py3.12-cuda`, installs `'.[gpu]'`, and adds
-`--break-system-packages`. **Never set `ENTRYPOINT`.** Build the base images first from the
-videoflow repo root: `./docker/build-images.sh`.
+`--break-system-packages`. **Never set `ENTRYPOINT`.** The base images come from the core:
+on a source install of videoflow, `deploy`/`run-local` build them from that checkout (or
+`./docker/build-images.sh` there does it by hand); on a PyPI install they pull
+`ghcr.io/videoflow/videoflow-base:<version>[-cuda]`.
 
 ## Verify
 

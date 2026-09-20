@@ -17,18 +17,28 @@ still blurred, because the Kalman tracker keeps predicting its box for
 
 ## Run it
 
-With videoflow installed from the sibling checkout (see the
+With videoflow installed (`pip install 'videoflow[all]'`, see the
 [quick start](../../README.md#quick-start)) and docker running:
 
 ```bash
+videoflow run-local videoflow-contrib://face_obfuscation      # on this machine
+videoflow deploy videoflow-contrib://face_obfuscation         # on the cluster kubectl points at
+```
+
+That fetches this repository at your videoflow version into
+`~/.videoflow/solutions/videoflow-contrib@v<version>/` once and works from
+there — `config.yaml` and `out/` land next to the graph in that directory,
+which is printed on every run. From a checkout, the path form is the same
+thing and keeps them here:
+
+```bash
 cd solutions/face_obfuscation
-videoflow run-local face_obfuscation.py      # on this machine
-videoflow deploy face_obfuscation.py         # on the cluster kubectl points at
+videoflow run-local face_obfuscation.py
 ```
 
 Both ask the same questions the first time (answer with Enter to take every
 default: the bundled sample clip, CPU, batch), write `config.yaml`, build the
-solution image from `Dockerfile` (and `videoflow-base` before it, once), run
+solution image from `Dockerfile` (and `videoflow-base` before it, pulled from `ghcr.io/videoflow` or built from a core checkout, once), run
 `prepare.py` inside it to fetch the clip and the detector weights, and run the
 flow to completion. None of the ML stack is installed on your machine: the
 image is the environment. `run-local` runs every worker as a container of that

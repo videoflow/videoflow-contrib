@@ -16,10 +16,14 @@ what to try first, how to tell the failure layers apart, and when to stop.
 Each is seconds. An image build is minutes. Run them before building anything.
 
 ```bash
-videoflow --help                                     # the CLI, installed from the sibling checkout
-python -c "import videoflow, os; print(os.path.dirname(os.path.dirname(videoflow.__file__)))"
-                                                     # ... and from SOURCE: that is the checkout the
-                                                     #     base image is built from
+videoflow --help                                     # the CLI
+python -c "import videoflow, os; r = os.path.dirname(os.path.dirname(videoflow.__file__)); print(videoflow.__version__, r, os.path.isdir(os.path.join(r, 'docker', 'base')))"
+                                                     # True: a SOURCE install — the base image is built from
+                                                     #   that checkout, so a core change needs `docker rmi videoflow-base:py3.12`
+                                                     # False: a wheel — the base image is pulled from
+                                                     #   ghcr.io/videoflow/videoflow-base:<that version>
+                                                     # Solutions: the path form runs THIS checkout; the
+                                                     #   videoflow-contrib://<name> form runs the released tag.
 docker info --format '{{json .Runtimes}}' | grep -q nvidia && echo "nvidia runtime" || echo "no nvidia runtime (GPU workers run device-less locally)"
 
 kubectl config current-context                       # the cluster you mean — deploy never switches it

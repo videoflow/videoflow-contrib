@@ -13,29 +13,32 @@ This contribution repository is both the proving ground for new functionality, a
 
 ## Quick start
 
-Clone both repositories side by side, install videoflow from its checkout (or
-`pip install 'videoflow[all]'` from PyPI — the editable checkout is for working
-against unreleased core), and run a solution — locally or on the cluster
-`kubectl` points at. Nothing else goes on your machine: the ML stacks live in
-the solution images, which both commands build for you.
+Install videoflow from PyPI and name the solution you want — locally, or on
+the cluster `kubectl` points at. Nothing is cloned by hand and nothing else
+goes on your machine: the ML stacks live in the solution images, which both
+commands build for you.
 
 ```bash
-git clone https://github.com/videoflow/videoflow
-git clone https://github.com/videoflow/videoflow-contrib
-uv tool install --editable './videoflow[all]'          # `videoflow` on your PATH
-#   or: python3 -m venv .venv && .venv/bin/pip install -e './videoflow[all]'
+pip install 'videoflow[all]'                              # or: uv tool install 'videoflow[all]'
 
-cd videoflow-contrib/solutions/human_tracking
-videoflow run-local human_tracking.py        # local: the workers run in the solution image
-videoflow deploy human_tracking.py           # cluster: the same image, as pods
+videoflow run-local videoflow-contrib://human_tracking    # local: the workers run in the solution image
+videoflow deploy videoflow-contrib://human_tracking       # cluster: the same image, as pods
 ```
 
-The first run asks a few questions (Enter takes the defaults: the bundled
-sample clip, CPU, batch) and writes `config.yaml`; the first build takes minutes
-(`videoflow-base`, then the solution image); prep runs inside the image and
-fetches the sample and the weights; the annotated video lands in `out/`. Docker
-must be running; for `deploy`, `kubectl` must point at your cluster. That is
-the whole story on a laptop cluster (kind, minikube, k3s, Docker Desktop).
+`videoflow-contrib://<name>` is `solutions/<name>` of this repository at the
+tag matching your installed videoflow (the two release in lockstep). The first
+use fetches it — one shallow clone into
+`~/.videoflow/solutions/videoflow-contrib@v<version>/`, reused afterwards — and
+prints where; the solution's `config.yaml` and its `out/` live there, next to
+the graph, and `--config ./my.yaml` keeps them somewhere of your own. The first
+run asks a few questions (Enter takes the defaults: the bundled sample clip,
+CPU, batch) and writes that `config.yaml`; the first build takes minutes
+(`videoflow-base` is pulled from `ghcr.io/videoflow`, then the solution image
+is built); prep runs inside the image and fetches the sample and the weights.
+Docker must be running; for `deploy`, `kubectl` must point at your cluster.
+That is the whole story on a laptop cluster (kind, minikube, k3s, Docker
+Desktop). Working from a clone of this repository instead is described under
+[Developing](#developing).
 
 **A multi-node or shared cluster** needs a handful of per-cluster values — the
 registry the nodes pull from, an RWX claim and the directory it is served at,
@@ -122,12 +125,15 @@ sub-package. The checklist:
 ## Solutions
 
 End-to-end flows that wire components together. Each one runs with a single
-command from its own directory, locally or on a cluster:
+command, locally or on a cluster:
 
 | Solution | What it does | Run |
 |---|---|---|
-| [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow run-local face_obfuscation.py` / `videoflow deploy face_obfuscation.py` |
-| [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow run-local human_tracking.py` / `videoflow deploy human_tracking.py` |
+| [face_obfuscation](solutions/face_obfuscation) | Detects, tracks and Gaussian-blurs every face in a video. | `videoflow run-local videoflow-contrib://face_obfuscation` / `videoflow deploy videoflow-contrib://face_obfuscation` |
+| [human_tracking](solutions/human_tracking) | Pose estimation + appearance re-identification: tracks people through occlusion. | `videoflow run-local videoflow-contrib://human_tracking` / `videoflow deploy videoflow-contrib://human_tracking` |
+
+From a checkout, the path form is the same thing:
+`cd solutions/<name> && videoflow run-local <name>.py`.
 
 Each asks for its inputs the first time (a bundled sample clip is the default),
 writes a `config.yaml`, builds its image, fetches its weights in the prep hook,
@@ -136,8 +142,9 @@ its configuration reference.
 
 > **Looking for the toy solutions?** `toy_calculator`, `toy_fusion`,
 > `toy_router` and `toy_recovery` live in the core repo:
-> [videoflow/solutions](https://github.com/videoflow/videoflow/tree/master/solutions),
-> where they also serve as its end-to-end test suite. They need no models, no
+> [videoflow/solutions](https://github.com/videoflow/videoflow/tree/master/solutions)
+> (`videoflow run-local videoflow://toy_calculator`), where they also serve as
+> its end-to-end test suite. They need no models, no
 > footage and no dependencies beyond the videoflow base image, and together they
 > exercise most of the framework (the node types, both flow types, both join
 > modes, replication and partitioned routing, lifecycle hooks, metadata and
@@ -266,6 +273,41 @@ and every automated step still has a manual override (`--config`, `--image`,
 [videoflow deployment guide](https://videoflow.github.io/videoflow/distributed/deploying-to-kubernetes.html)
 (source: `../videoflow/docs/source/distributed/deploying-to-kubernetes.rst`)
 for the full pipeline.
+
+## Developing
+
+Everything above works from a PyPI install. To change a component or a
+solution, work from a clone of this repository — next to a clone of
+[videoflow](https://github.com/videoflow/videoflow), which is the layout the
+two repositories' docs and tooling assume:
+
+```bash
+git clone https://github.com/videoflow/videoflow
+git clone https://github.com/videoflow/videoflow-contrib                # side by side
+uv tool install --editable './videoflow[all]'                          # `videoflow` on your PATH, from the checkout
+#   or, against the released core: pip install 'videoflow[all]'
+
+cd videoflow-contrib/solutions/human_tracking
+videoflow run-local human_tracking.py        # the path form: this checkout, not the cached one
+```
+
+Either install of the CLI works with a checkout of this repository; the
+difference is where `videoflow-base` comes from. An **editable install of
+core** builds it from that checkout, so core changes reach the workers; a
+**PyPI install** pulls the published `ghcr.io/videoflow/videoflow-base:<version>`.
+The solution images on top of it are content-addressed and rebuild on their
+own when anything they `COPY` changes. To run this checkout's solutions by
+`videoflow-contrib://` name — say, to test the fetch path — point the cache at
+it with `VF_SOLUTION_REF=master` (a branch, so the cache will not refresh
+itself), or just use the path form.
+
+```bash
+./validate-components.sh            # every component.yaml against the installed core's schema
+./set-version.py --check            # every sub-package declares the same version
+cd <component> && uv build          # its wheel
+cd <component> && pytest            # its tests (the packages that have them)
+uv tool install pre-commit && pre-commit install
+```
 
 ## Releasing
 
