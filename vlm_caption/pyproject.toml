@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "videoflow_contrib_vlm_caption"
-version = "1.0.3"
+version = "1.0.4"
 description = "Hugging Face vision-language frame captioner for Videoflow — the multi-GPU reference component (RFC 0003)"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Jadiel de Armas", email = "jadielam@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
-    "videoflow>=1.0.3",
+    "videoflow>=1.0.4",
     "numpy>=1.24",
     "pillow",
     "torch>=2.4",              # CPU wheel; the GPU image pre-installs CUDA torch (cu124), which satisfies this
